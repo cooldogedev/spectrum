@@ -46,12 +46,10 @@ func (t *Tracker) handlePacket(pk packet.Packet) {
 			t.effects.Remove(pk.EffectType)
 		}
 	case *packet.PlayerList:
-		if pk.ActionType == packet.PlayerListActionAdd {
-			for _, entry := range pk.Entries {
+		for _, entry := range pk.Entries {
+			if pk.ActionType == packet.PlayerListActionAdd {
 				t.players.Add(entry.UUID)
-			}
-		} else {
-			for _, entry := range pk.Entries {
+			} else {
 				t.players.Remove(entry.UUID)
 			}
 		}
@@ -71,6 +69,7 @@ func (t *Tracker) clearBossBars(s *Session) {
 		})
 		return true
 	})
+	t.bossBars.Clear()
 }
 
 func (t *Tracker) clearEffects(s *Session) {
@@ -82,6 +81,7 @@ func (t *Tracker) clearEffects(s *Session) {
 		})
 		return true
 	})
+	t.effects.Clear()
 }
 
 func (t *Tracker) clearEntities(s *Session) {
@@ -91,6 +91,7 @@ func (t *Tracker) clearEntities(s *Session) {
 		})
 		return true
 	})
+	t.entities.Clear()
 }
 
 func (t *Tracker) clearPlayers(s *Session) {
@@ -101,6 +102,7 @@ func (t *Tracker) clearPlayers(s *Session) {
 		})
 		return true
 	})
+	t.players.Clear()
 
 	_ = s.clientConn.WritePacket(&packet.PlayerList{
 		ActionType: packet.PlayerListActionRemove,
@@ -115,4 +117,6 @@ func (t *Tracker) clearScoreboards(s *Session) {
 		})
 		return true
 	})
+
+	t.scoreboards.Clear()
 }

@@ -24,7 +24,7 @@ func main() {
 		TexturePacksRequired: true,
 		ResourcePacks:        packs,
 	}
-	proxy := spectrum.NewSpectrum(server.NewBasicFinder(":19133"), logger, nil)
+	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery(":19133"), logger, nil)
 	if err := proxy.Listen(listenConfig); err != nil {
 		logger.Errorf("Failed to listen on proxy: %v", err)
 		return

@@ -11,13 +11,12 @@ type Spectrum struct {
 	logger   internal.Logger
 	registry *session.Registry
 
-	listener *minecraft.Listener
-	finder   server.Finder
-
-	opts *Opts
+	listener  *minecraft.Listener
+	discovery server.Discovery
+	opts      *Opts
 }
 
-func NewSpectrum(finder server.Finder, logger internal.Logger, opts *Opts) *Spectrum {
+func NewSpectrum(discovery server.Discovery, logger internal.Logger, opts *Opts) *Spectrum {
 	if opts == nil {
 		opts = DefaultOpts()
 	}
@@ -25,8 +24,9 @@ func NewSpectrum(finder server.Finder, logger internal.Logger, opts *Opts) *Spec
 	return &Spectrum{
 		logger:   logger,
 		registry: session.NewRegistry(),
-		finder:   finder,
-		opts:     opts,
+
+		discovery: discovery,
+		opts:      opts,
 	}
 }
 
@@ -49,7 +49,7 @@ func (s *Spectrum) Accept() (*session.Session, error) {
 		return nil, err
 	}
 
-	serverConn, err := s.finder.Find(conn.(*minecraft.Conn))
+	serverConn, err := s.discovery.Discover(conn.(*minecraft.Conn))
 	if err != nil {
 		_ = conn.Close()
 		return nil, err

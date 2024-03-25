@@ -15,6 +15,7 @@ import (
 type Session struct {
 	clientConn *minecraft.Conn
 
+	serverAddr string
 	serverConn *server.Conn
 	serverMu   sync.RWMutex
 
@@ -43,6 +44,7 @@ func NewSession(clientConn *minecraft.Conn, logger internal.Logger, registry *Re
 
 	go func() {
 		serverConn, err := s.Dial(addr)
+		s.serverAddr = addr
 		s.serverConn = serverConn
 		if err != nil {
 			s.Close()
@@ -56,7 +58,7 @@ func NewSession(clientConn *minecraft.Conn, logger internal.Logger, registry *Re
 			return
 		}
 
-		//s.sendMetadata(true)
+		s.sendMetadata(true)
 		for _, pk := range serverConn.ReadDeferred() {
 			_ = clientConn.WritePacket(pk)
 		}
@@ -120,7 +122,6 @@ func (s *Session) Transfer(addr string) error {
 
 	s.tracker.clearEffects(s)
 	s.tracker.clearEntities(s)
-
 	s.tracker.clearBossBars(s)
 	s.tracker.clearPlayers(s)
 	s.tracker.clearScoreboards(s)
@@ -154,6 +155,8 @@ func (s *Session) Transfer(addr string) error {
 
 	s.animation.Clear(s.clientConn, serverGameData)
 	s.serverConn.Close()
+
+	s.serverAddr = addr
 	s.serverConn = conn
 
 	for _, pk := range conn.ReadDeferred() {

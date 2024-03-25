@@ -14,7 +14,7 @@ func main() {
 		StatusProvider: spectrum.NewStatusProvider("Spectrum Proxy"),
 	}
 
-	s := spectrum.NewSpectrum(server.NewBasicFinder(":19133"), logger, nil)
+	s := spectrum.NewSpectrum(server.NewStaticDiscovery(":19133"), logger, nil)
 	if err := s.Listen(listenConfig); err != nil {
 		logger.Errorf("Failed to listen on s: %v", err)
 		return

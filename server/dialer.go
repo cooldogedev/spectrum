@@ -7,8 +7,7 @@ import (
 )
 
 type Dialer struct {
-	Origin string
-
+	Origin       string
 	ClientData   login.ClientData
 	IdentityData login.IdentityData
 }
