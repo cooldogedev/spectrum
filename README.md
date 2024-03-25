@@ -3,3 +3,7 @@ Spectrum is a simple, lightweight, and easy to use Minecraft: Bedrock Edition pr
 
 ## Examples
 You can find examples of how to use Spectrum in the [example](example) directory.
+
+
+## Implementations
+- [PocketMine-MP](https://github.com/cooldogedev/spectrum-pm)
