@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"fmt"
+	"github.com/quic-go/quic-go"
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/login"
@@ -18,7 +19,7 @@ import (
 // Conn is a connection to a server. It is used to read and write packets to the server, and to manage the
 // connection to the server.
 type Conn struct {
-	conn       net.Conn
+	conn       quic.Connection
 	compressor packet.Compression
 
 	reader *proto.Reader
@@ -38,13 +39,13 @@ type Conn struct {
 }
 
 // NewConn creates a new Conn with the innerConn and pool passed.
-func NewConn(conn net.Conn, pool packet.Pool) *Conn {
+func NewConn(conn quic.Connection, stream quic.Stream, pool packet.Pool) *Conn {
 	c := &Conn{
 		conn:       conn,
 		compressor: packet.FlateCompression,
 
-		reader: proto.NewReader(conn),
-		writer: proto.NewWriter(conn),
+		reader: proto.NewReader(stream),
+		writer: proto.NewWriter(stream),
 
 		closed: make(chan struct{}),
 
@@ -160,7 +161,7 @@ func (c *Conn) Close() {
 		return
 	default:
 		close(c.closed)
-		_ = c.conn.Close()
+		_ = c.conn.CloseWithError(0, "")
 	}
 }
 

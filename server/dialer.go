@@ -1,9 +1,12 @@
 package server
 
 import (
+	"context"
+	"crypto/tls"
+	"github.com/quic-go/quic-go"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/login"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
-	"net"
+	"time"
 )
 
 type Dialer struct {
@@ -13,17 +16,21 @@ type Dialer struct {
 }
 
 func (d Dialer) Dial(addr string) (*Conn, error) {
-	conn, err := net.Dial("tcp", addr)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	conn, err := quic.DialAddr(ctx, addr, &tls.Config{
+		InsecureSkipVerify: true,
+		NextProtos:         []string{"spectrum"},
+	}, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	if tcpConn, ok := conn.(*net.TCPConn); ok {
-		_ = tcpConn.SetNoDelay(true)
-		_ = tcpConn.SetLinger(0)
-		_ = tcpConn.SetReadBuffer(1024 * 1024 * 8)
-		_ = tcpConn.SetWriteBuffer(1024 * 1024 * 8)
+	stream, err := conn.OpenStreamSync(ctx)
+	if err != nil {
+		return nil, err
 	}
-	c := NewConn(conn, packet.NewServerPool())
+	c := NewConn(conn, stream, packet.NewServerPool())
 	return c, c.login(d.Origin, d.ClientData, d.IdentityData)
 }
