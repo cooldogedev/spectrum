@@ -22,6 +22,7 @@ type Session struct {
 	logger   internal.Logger
 	registry *Registry
 
+	handler   Handler
 	tracker   *Tracker
 	animation animation.Animation
 
@@ -37,6 +38,7 @@ func NewSession(clientConn *minecraft.Conn, logger internal.Logger, registry *Re
 		logger:   logger,
 		registry: registry,
 
+		handler:   NoopHandler{},
 		tracker:   NewTracker(),
 		animation: &animation.Dimension{},
 		latency:   0,
@@ -164,6 +166,10 @@ func (s *Session) Transfer(addr string) error {
 	}
 	s.logger.Debugf("Transferred session for %s to %s", s.clientConn.IdentityData().DisplayName, addr)
 	return nil
+}
+
+func (s *Session) SetHandler(handler Handler) {
+	s.handler = handler
 }
 
 func (s *Session) SetAnimation(animation animation.Animation) {
