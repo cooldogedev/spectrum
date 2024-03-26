@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"github.com/sirupsen/logrus"
 	"github.com/spectrum-proxy/spectrum/api/packet"
 	"github.com/spectrum-proxy/spectrum/internal"
@@ -57,41 +58,72 @@ func (a *API) Close() error {
 func (a *API) handle(conn net.Conn) {
 	defer conn.Close()
 
+	closed := make(chan struct{})
 	reader := protocol.NewReader(conn)
-	for {
-		data := reader.ReadPacket()
-		packetID := binary.LittleEndian.Uint32(data)
-		factory, ok := a.pool[packetID]
-		if !ok {
-			a.logger.Errorf("unknown packet ID: %v", packetID)
-			continue
+	go func() {
+		for {
+			select {
+			case <-closed:
+				return
+			default:
+				if err := reader.Read(); err != nil {
+					close(closed)
+					return
+				}
+			}
 		}
+	}()
 
-		buf := internal.BufferPool.Get().(*bytes.Buffer)
-		buf.Write(data[4:])
+	for {
+		select {
+		case <-closed:
+			return
+		default:
+			pk, err := a.decodePacket(reader.ReadPacket())
+			if err != nil {
+				a.logger.Errorf("Failed to decode packet: %v", err)
+				close(closed)
+				return
+			}
+			a.handlePacket(pk)
+		}
+	}
+}
 
-		pk := factory()
-		pk.Decode(buf)
-
+func (a *API) decodePacket(payload []byte) (pk packet.Packet, err error) {
+	buf := internal.BufferPool.Get().(*bytes.Buffer)
+	defer func() {
 		buf.Reset()
 		internal.BufferPool.Put(buf)
-		switch pk := pk.(type) {
-		case *packet.Kick:
-			s := a.sessions.GetSessionByUsername(pk.Username)
-			if s == nil {
-				continue
-			}
 
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic while decoding packet: %v", r)
+		}
+	}()
+
+	packetID := binary.LittleEndian.Uint32(payload[:4])
+	factory, ok := a.pool[packetID]
+	if !ok {
+		return nil, fmt.Errorf("unknown packet ID: %v", packetID)
+	}
+
+	buf.Write(payload[4:])
+	pk = factory()
+	pk.Decode(buf)
+	return
+}
+
+func (a *API) handlePacket(pk packet.Packet) {
+	switch pk := pk.(type) {
+	case *packet.Kick:
+		s := a.sessions.GetSessionByUsername(pk.Username)
+		if s != nil {
 			s.Disconnect(pk.Reason)
-		case *packet.Transfer:
-			s := a.sessions.GetSessionByUsername(pk.Username)
-			if s == nil {
-				continue
-			}
-
-			if err := s.Transfer(pk.Addr); err != nil {
-				a.logger.Errorf("error transferring session: %v", err)
-			}
+		}
+	case *packet.Transfer:
+		s := a.sessions.GetSessionByUsername(pk.Username)
+		if s != nil {
+			_ = s.Transfer(pk.Addr)
 		}
 	}
 }
