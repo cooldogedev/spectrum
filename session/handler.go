@@ -2,6 +2,7 @@ package session
 
 import (
 	"errors"
+	packet2 "github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 	"github.com/spectrum-proxy/spectrum/server/packet"
 	"net"
 	"strings"
@@ -36,9 +37,15 @@ func handleIncoming(s *Session) {
 			if err := s.Transfer(pk.Addr); err != nil {
 				s.logger.Errorf("Failed to transfer: %v", err)
 			}
-		default:
+		case packet2.Packet:
+			s.tracker.handlePacket(pk)
 			if err := s.clientConn.WritePacket(pk); err != nil {
 				s.logger.Errorf("Failed to write packet to client: %v", err)
+				return
+			}
+		case []byte:
+			if _, err := s.clientConn.Write(pk); err != nil {
+				s.logger.Errorf("Failed to write raw packet to client: %v", err)
 				return
 			}
 		}

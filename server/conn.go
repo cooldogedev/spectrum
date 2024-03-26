@@ -15,6 +15,11 @@ import (
 	"sync/atomic"
 )
 
+const (
+	packetDecodeNeeded    = 0x00
+	packetDecodeNotNeeded = 0x01
+)
+
 // Conn is a connection to a server. It is used to read and write packets to the server, and to manage the
 // connection to the server.
 type Conn struct {
@@ -70,17 +75,28 @@ func NewConn(conn net.Conn, pool packet.Pool) *Conn {
 
 // ReadPacket reads a packet from the connection. It returns the packet read, or an error if the packet could not
 // be read.
-func (c *Conn) ReadPacket() (pk packet.Packet, err error) {
+func (c *Conn) ReadPacket() (any, error) {
 	select {
 	case <-c.closed:
 		return nil, fmt.Errorf("connection closed")
 	default:
-		return c.read()
+		payload := c.reader.ReadPacket()
+		decompressed, err := c.compressor.Decompress(payload[1:])
+		if err != nil {
+			return nil, err
+		}
+
+		if payload[0] == packetDecodeNeeded {
+			return c.decode(decompressed)
+		} else if payload[0] == packetDecodeNotNeeded {
+			return decompressed, nil
+		}
+		return nil, fmt.Errorf("received unknown decode marker byte %v", payload[0])
 	}
 }
 
-// ReadDeferred reads all packets buffered in the connection and returns them. It returns an empty slice if no
-// packets were buffered.
+// ReadDeferred reads all packets deferred in the connection and returns them. It returns an empty slice if no
+// packets were deferred.
 func (c *Conn) ReadDeferred() []packet.Packet {
 	packets := c.deferredPackets
 	c.deferredPackets = nil
@@ -115,10 +131,19 @@ func (c *Conn) WritePacket(pk packet.Packet) error {
 // Expect reads a packet from the connection and expects it to have the ID passed. If the packet read does not
 // have the ID passed, it will be deferred and the function will be called again until a packet with the ID
 // passed is read. It returns the packet read, or an error if the packet could not be read.
-func (c *Conn) Expect(id uint32, deferrable bool) (packet.Packet, error) {
-	pk, err := c.ReadPacket()
+func (c *Conn) Expect(id uint32, deferrable bool) (pk packet.Packet, err error) {
+	payload, err := c.ReadPacket()
 	if err != nil {
 		return nil, err
+	}
+
+	if p, ok := payload.(packet.Packet); ok {
+		pk = p
+	} else if data, ok := payload.([]byte); ok {
+		pk, err = c.decode(data)
+		if err != nil {
+			return
+		}
 	}
 
 	if pk.ID() != id {
@@ -129,7 +154,7 @@ func (c *Conn) Expect(id uint32, deferrable bool) (packet.Packet, error) {
 	if deferrable {
 		c.deferredPackets = append(c.deferredPackets, pk)
 	}
-	return pk, nil
+	return
 }
 
 // SetShieldID sets the shield ID of the connection. It is used to set the shield ID of the connection, which is
@@ -164,17 +189,13 @@ func (c *Conn) Close() {
 	}
 }
 
-func (c *Conn) read() (pk packet.Packet, err error) {
+// decode decodes a packet payload and returns the decoded packet or an error if the packet could not be decoded.
+func (c *Conn) decode(payload []byte) (pk packet.Packet, err error) {
 	c.readMu.Lock()
 	defer c.readMu.Unlock()
 
-	data, err := c.compressor.Decompress(c.reader.ReadPacket())
-	if err != nil {
-		return nil, err
-	}
-
 	buf := internal.BufferPool.Get().(*bytes.Buffer)
-	buf.Write(data)
+	buf.Write(payload)
 	defer func() {
 		buf.Reset()
 		internal.BufferPool.Put(buf)
