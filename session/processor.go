@@ -45,6 +45,7 @@ func handleIncoming(s *Session) {
 				return
 			}
 
+			s.tracker.handlePacket(pk)
 			if err := s.clientConn.WritePacket(pk); err != nil {
 				s.logger.Errorf("Failed to write packet to client: %v", err)
 				return
