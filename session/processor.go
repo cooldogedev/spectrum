@@ -42,7 +42,7 @@ func handleIncoming(s *Session) {
 			s.handler.HandleIncoming(ctx, pk)
 
 			if ctx.Cancelled() {
-				return
+				continue
 			}
 
 			s.tracker.handlePacket(pk)
@@ -74,7 +74,7 @@ func handleOutgoing(s *Session) {
 		s.handler.HandleOutgoing(ctx, pk)
 
 		if ctx.Cancelled() {
-			return
+			continue
 		}
 
 		if err := s.Server().WritePacket(pk); err != nil {
