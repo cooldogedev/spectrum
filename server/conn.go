@@ -27,22 +27,21 @@ type Conn struct {
 	compressor packet.Compression
 
 	reader *proto.Reader
-	writer *proto.Writer
 
-	readMu  sync.Mutex
+	writer  *proto.Writer
 	writeMu sync.Mutex
 
 	gameData minecraft.GameData
 	shieldID atomic.Int32
 
-	closed chan struct{}
-
 	pool            packet.Pool
 	header          packet.Header
 	deferredPackets []packet.Packet
+
+	closed chan struct{}
 }
 
-// NewConn creates a new Conn with the innerConn and pool passed.
+// NewConn creates a new Conn with the conn and pool passed.
 func NewConn(conn net.Conn, pool packet.Pool) *Conn {
 	c := &Conn{
 		conn:       conn,
@@ -51,11 +50,11 @@ func NewConn(conn net.Conn, pool packet.Pool) *Conn {
 		reader: proto.NewReader(conn),
 		writer: proto.NewWriter(conn),
 
-		closed: make(chan struct{}),
-
 		pool:     pool,
 		header:   packet.Header{},
 		shieldID: atomic.Int32{},
+
+		closed: make(chan struct{}),
 	}
 
 	go func() {
@@ -120,7 +119,6 @@ func (c *Conn) WritePacket(pk packet.Packet) error {
 	}
 
 	pk.Marshal(protocol.NewWriter(buf, c.shieldID.Load()))
-
 	data, err := c.compressor.Compress(buf.Bytes())
 	if err != nil {
 		return err
@@ -157,12 +155,6 @@ func (c *Conn) Expect(id uint32, deferrable bool) (pk packet.Packet, err error) 
 	return
 }
 
-// SetShieldID sets the shield ID of the connection. It is used to set the shield ID of the connection, which is
-// used to read and write packets.
-func (c *Conn) SetShieldID(id int32) {
-	c.shieldID.Store(id)
-}
-
 // GameData ...
 func (c *Conn) GameData() minecraft.GameData {
 	return c.gameData
@@ -191,9 +183,6 @@ func (c *Conn) Close() {
 
 // decode decodes a packet payload and returns the decoded packet or an error if the packet could not be decoded.
 func (c *Conn) decode(payload []byte) (pk packet.Packet, err error) {
-	c.readMu.Lock()
-	defer c.readMu.Unlock()
-
 	buf := internal.BufferPool.Get().(*bytes.Buffer)
 	buf.Write(payload)
 	defer func() {
@@ -268,7 +257,7 @@ func (c *Conn) login(addr string, clientData login.ClientData, identityData logi
 
 	for _, item := range startGame.Items {
 		if item.Name == "minecraft:shield" {
-			c.SetShieldID(int32(item.RuntimeID))
+			c.shieldID.Store(int32(item.RuntimeID))
 			break
 		}
 	}
