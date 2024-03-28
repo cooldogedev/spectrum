@@ -74,7 +74,7 @@ func NewConn(conn net.Conn, pool packet.Pool) *Conn {
 
 // ReadPacket reads a packet from the connection. It returns the packet read, or an error if the packet could not
 // be read.
-func (c *Conn) ReadPacket() (any, error) {
+func (c *Conn) ReadPacket(decode bool) (any, error) {
 	select {
 	case <-c.closed:
 		return nil, fmt.Errorf("connection closed")
@@ -85,7 +85,7 @@ func (c *Conn) ReadPacket() (any, error) {
 			return nil, err
 		}
 
-		if payload[0] == packetDecodeNeeded {
+		if payload[0] == packetDecodeNeeded || decode {
 			return c.decode(decompressed)
 		} else if payload[0] == packetDecodeNotNeeded {
 			return decompressed, nil
@@ -130,20 +130,12 @@ func (c *Conn) WritePacket(pk packet.Packet) error {
 // have the ID passed, it will be deferred and the function will be called again until a packet with the ID
 // passed is read. It returns the packet read, or an error if the packet could not be read.
 func (c *Conn) Expect(id uint32, deferrable bool) (pk packet.Packet, err error) {
-	payload, err := c.ReadPacket()
+	payload, err := c.ReadPacket(true)
 	if err != nil {
 		return nil, err
 	}
 
-	if p, ok := payload.(packet.Packet); ok {
-		pk = p
-	} else if data, ok := payload.([]byte); ok {
-		pk, err = c.decode(data)
-		if err != nil {
-			return
-		}
-	}
-
+	pk, _ = payload.(packet.Packet)
 	if pk.ID() != id {
 		c.deferredPackets = append(c.deferredPackets, pk)
 		return c.Expect(id, deferrable)
