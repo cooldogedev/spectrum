@@ -22,8 +22,9 @@ type Session struct {
 	logger   internal.Logger
 	registry *Registry
 
-	tracker   *Tracker
 	animation animation.Animation
+	processor Processor
+	tracker   *Tracker
 
 	latency      int64
 	once         sync.Once
@@ -37,13 +38,13 @@ func NewSession(clientConn *minecraft.Conn, logger internal.Logger, registry *Re
 		logger:   logger,
 		registry: registry,
 
-		tracker:   NewTracker(),
 		animation: &animation.Dimension{},
+		tracker:   NewTracker(),
 		latency:   0,
 	}
 
 	go func() {
-		serverConn, err := s.Dial(addr)
+		serverConn, err := s.dial(addr)
 		s.serverAddr = addr
 		s.serverConn = serverConn
 		if err != nil {
@@ -73,16 +74,6 @@ func NewSession(clientConn *minecraft.Conn, logger internal.Logger, registry *Re
 	return
 }
 
-func (s *Session) Dial(addr string) (*server.Conn, error) {
-	clientConn := s.clientConn
-	d := server.Dialer{
-		Origin:       clientConn.RemoteAddr().String(),
-		ClientData:   clientConn.ClientData(),
-		IdentityData: clientConn.IdentityData(),
-	}
-	return d.Dial(addr)
-}
-
 func (s *Session) Transfer(addr string) error {
 	if !s.transferring.CompareAndSwap(false, true) {
 		return errors.New("already transferring")
@@ -95,7 +86,7 @@ func (s *Session) Transfer(addr string) error {
 	}()
 
 	s.sendMetadata(true)
-	conn, err := s.Dial(addr)
+	conn, err := s.dial(addr)
 	if err != nil {
 		s.sendMetadata(false)
 		s.logger.Errorf("Failed to dial server: %v", err)
@@ -170,6 +161,10 @@ func (s *Session) SetAnimation(animation animation.Animation) {
 	s.animation = animation
 }
 
+func (s *Session) SetProcessor(processor Processor) {
+	s.processor = processor
+}
+
 func (s *Session) Disconnect(message string) {
 	_ = s.clientConn.WritePacket(&packet.Disconnect{
 		Message: message,
@@ -199,6 +194,16 @@ func (s *Session) Close() {
 		s.registry.RemoveSession(identity.XUID)
 		s.logger.Infof("Closed session for %s", identity.DisplayName)
 	})
+}
+
+func (s *Session) dial(addr string) (*server.Conn, error) {
+	clientConn := s.clientConn
+	d := server.Dialer{
+		Origin:       clientConn.RemoteAddr().String(),
+		ClientData:   clientConn.ClientData(),
+		IdentityData: clientConn.IdentityData(),
+	}
+	return d.Dial(addr)
 }
 
 func (s *Session) sendMetadata(noAI bool) {
