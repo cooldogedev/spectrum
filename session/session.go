@@ -2,12 +2,12 @@ package session
 
 import (
 	"errors"
+	"github.com/cooldogedev/spectrum/internal"
+	"github.com/cooldogedev/spectrum/server"
+	"github.com/cooldogedev/spectrum/session/animation"
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
-	"github.com/spectrum-proxy/spectrum/internal"
-	"github.com/spectrum-proxy/spectrum/server"
-	"github.com/spectrum-proxy/spectrum/session/animation"
 	"sync"
 	"sync/atomic"
 )

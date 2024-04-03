@@ -1,10 +1,10 @@
 package spectrum
 
 import (
+	"github.com/cooldogedev/spectrum/internal"
+	"github.com/cooldogedev/spectrum/server"
+	"github.com/cooldogedev/spectrum/session"
 	"github.com/sandertv/gophertunnel/minecraft"
-	"github.com/spectrum-proxy/spectrum/internal"
-	"github.com/spectrum-proxy/spectrum/server"
-	"github.com/spectrum-proxy/spectrum/session"
 )
 
 type Spectrum struct {
