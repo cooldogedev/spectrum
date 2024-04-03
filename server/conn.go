@@ -13,7 +13,6 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 	"net"
 	"sync"
-	"sync/atomic"
 )
 
 const (
@@ -32,8 +31,10 @@ type Conn struct {
 	writer  *proto.Writer
 	writeMu sync.Mutex
 
-	gameData minecraft.GameData
-	shieldID atomic.Int32
+	gameData  minecraft.GameData
+	runtimeID uint64
+	uniqueID  int64
+	shieldID  int32
 
 	pool            packet.Pool
 	header          packet.Header
@@ -51,9 +52,8 @@ func NewConn(conn net.Conn, pool packet.Pool) *Conn {
 		reader: proto.NewReader(conn),
 		writer: proto.NewWriter(conn),
 
-		pool:     pool,
-		header:   packet.Header{},
-		shieldID: atomic.Int32{},
+		pool:   pool,
+		header: packet.Header{},
 
 		closed: make(chan struct{}),
 	}
@@ -119,7 +119,7 @@ func (c *Conn) WritePacket(pk packet.Packet) error {
 		return err
 	}
 
-	pk.Marshal(protocol.NewWriter(buf, c.shieldID.Load()))
+	pk.Marshal(protocol.NewWriter(buf, c.shieldID))
 	data, err := c.compressor.Compress(buf.Bytes())
 	if err != nil {
 		return err
@@ -127,116 +127,25 @@ func (c *Conn) WritePacket(pk packet.Packet) error {
 	return c.writer.Write(data)
 }
 
-// Expect reads a packet from the connection and expects it to have the ID passed. If the packet read does not
-// have the ID passed, it will be deferred and the function will be called again until a packet with the ID
-// passed is read. It returns the packet read, or an error if the packet could not be read.
-func (c *Conn) Expect(id uint32, deferrable bool) (pk packet.Packet, err error) {
-	payload, err := c.ReadPacket(true)
-	if err != nil {
-		return nil, err
-	}
-
-	pk, _ = payload.(packet.Packet)
-	if pk.ID() != id {
-		c.deferredPackets = append(c.deferredPackets, pk)
-		return c.Expect(id, deferrable)
-	}
-
-	if deferrable {
-		c.deferredPackets = append(c.deferredPackets, pk)
-	}
-	return
-}
-
-// GameData ...
-func (c *Conn) GameData() minecraft.GameData {
-	return c.gameData
-}
-
-// LocalAddr ...
-func (c *Conn) LocalAddr() net.Addr {
-	return c.conn.RemoteAddr()
-}
-
-// RemoteAddr ...
-func (c *Conn) RemoteAddr() net.Addr {
-	return c.conn.RemoteAddr()
-}
-
-// Close ...
-func (c *Conn) Close() {
-	select {
-	case <-c.closed:
-		return
-	default:
-		close(c.closed)
-		_ = c.conn.Close()
-	}
-}
-
-// decode decodes a packet payload and returns the decoded packet or an error if the packet could not be decoded.
-func (c *Conn) decode(payload []byte) (pk packet.Packet, err error) {
-	buf := internal.BufferPool.Get().(*bytes.Buffer)
-	buf.Write(payload)
-	defer func() {
-		buf.Reset()
-		internal.BufferPool.Put(buf)
-
-		if r := recover(); r != nil {
-			err = fmt.Errorf("panic while reading packet: %v", r)
-		}
-	}()
-
-	header := packet.Header{}
-	if err := header.Read(buf); err != nil {
-		return nil, err
-	}
-
-	factory, ok := c.pool[header.PacketID]
-	if !ok {
-		return nil, fmt.Errorf("unknown packet ID %v", header.PacketID)
-	}
-
-	pk = factory()
-	pk.Marshal(protocol.NewReader(buf, c.shieldID.Load(), false))
-	return pk, nil
-}
-
-// login logs the connection into the server with the address, clientData and identityData passed. It returns
-// an error if the connection could not be logged in.
-func (c *Conn) login(addr string, clientData login.ClientData, identityData login.IdentityData) error {
-	clientDataBytes, _ := json.Marshal(clientData)
-	identityDataBytes, _ := json.Marshal(identityData)
-
-	err := c.WritePacket(&packet2.Connect{
-		Addr:     addr,
-		EntityID: computeEntityID(identityData.XUID),
-
-		ClientData:   clientDataBytes,
-		IdentityData: identityDataBytes,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to write connect packet: %v", err)
-	}
-
-	startGamePacket, err := c.Expect(packet.IDStartGame, false)
+// Spawn will start the spawning sequence using the game data found in conn.GameData(), which was
+// sent earlier by the server.
+func (c *Conn) Spawn() (err error) {
+	startGamePacket, err := c.expect(packet.IDStartGame, false)
 	if err != nil {
 		return fmt.Errorf("failed to read start game packet: %v", err)
 	}
 
-	err = c.WritePacket(&packet.RequestChunkRadius{
-		ChunkRadius: 16,
-	})
+	err = c.WritePacket(&packet.RequestChunkRadius{ChunkRadius: 16})
 	if err != nil {
 		return fmt.Errorf("failed to write request chunk radius packet: %v", err)
 	}
 
-	chunkRadiusUpdatedPacket, err := c.Expect(packet.IDChunkRadiusUpdated, true)
+	chunkRadiusUpdatedPacket, err := c.expect(packet.IDChunkRadiusUpdated, true)
 	if err != nil {
 		return fmt.Errorf("failed to read chunk radius updated packet: %v", err)
 	}
 
-	_, err = c.Expect(packet.IDPlayStatus, true)
+	_, err = c.expect(packet.IDPlayStatus, true)
 	if err != nil {
 		return fmt.Errorf("failed to read play status packet: %v", err)
 	}
@@ -253,7 +162,7 @@ func (c *Conn) login(addr string, clientData login.ClientData, identityData logi
 
 	for _, item := range startGame.Items {
 		if item.Name == "minecraft:shield" {
-			c.shieldID.Store(int32(item.RuntimeID))
+			c.shieldID = int32(item.RuntimeID)
 			break
 		}
 	}
@@ -263,8 +172,8 @@ func (c *Conn) login(addr string, clientData login.ClientData, identityData logi
 		WorldSeed:  startGame.WorldSeed,
 		Difficulty: startGame.Difficulty,
 
-		EntityUniqueID:  computeEntityID(identityData.XUID),
-		EntityRuntimeID: uint64(computeEntityID(identityData.XUID)),
+		EntityUniqueID:  c.uniqueID,
+		EntityRuntimeID: c.runtimeID,
 
 		PlayerGameMode: startGame.PlayerGameMode,
 
@@ -313,15 +222,101 @@ func (c *Conn) login(addr string, clientData login.ClientData, identityData logi
 
 		UseBlockNetworkIDHashes: startGame.UseBlockNetworkIDHashes,
 	}
-	return nil
+	return
 }
 
-// computeEntityID generates a deterministic entity ID from an XUID using FNV-1a.
-func computeEntityID(xuid string) int64 {
-	hash := int64(0)
-	for _, char := range xuid {
-		hash ^= int64(char)
-		hash *= (2 ^ 40) + (2 ^ 8) + 0xb3
+// GameData ...
+func (c *Conn) GameData() minecraft.GameData {
+	return c.gameData
+}
+
+// RemoteAddr ...
+func (c *Conn) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
+}
+
+// Close ...
+func (c *Conn) Close() {
+	select {
+	case <-c.closed:
+		return
+	default:
+		close(c.closed)
+		_ = c.conn.Close()
 	}
-	return hash & 0x7FFFFFFFFFFFFFFF
+}
+
+// decode decodes a packet payload and returns the decoded packet or an error if the packet could not be decoded.
+func (c *Conn) decode(payload []byte) (pk packet.Packet, err error) {
+	buf := internal.BufferPool.Get().(*bytes.Buffer)
+	buf.Write(payload)
+	defer func() {
+		buf.Reset()
+		internal.BufferPool.Put(buf)
+
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic while reading packet: %v", r)
+		}
+	}()
+
+	header := packet.Header{}
+	if err := header.Read(buf); err != nil {
+		return nil, err
+	}
+
+	factory, ok := c.pool[header.PacketID]
+	if !ok {
+		return nil, fmt.Errorf("unknown packet ID %v", header.PacketID)
+	}
+
+	pk = factory()
+	pk.Marshal(protocol.NewReader(buf, c.shieldID, false))
+	return pk, nil
+}
+
+// expect reads a packet from the connection and expects it to have the ID passed. If the packet read does not
+// have the ID passed, it will be deferred and the function will be called again until a packet with the ID
+// passed is read. It returns the packet read, or an error if the packet could not be read.
+func (c *Conn) expect(id uint32, deferrable bool) (pk packet.Packet, err error) {
+	payload, err := c.ReadPacket(true)
+	if err != nil {
+		return nil, err
+	}
+
+	pk, _ = payload.(packet.Packet)
+	if pk.ID() != id {
+		c.deferredPackets = append(c.deferredPackets, pk)
+		return c.expect(id, deferrable)
+	}
+
+	if deferrable {
+		c.deferredPackets = append(c.deferredPackets, pk)
+	}
+	return
+}
+
+// connect send a connection request to the server with the address, clientData and identityData passed. It returns
+// an error if the server doesn't respond.
+func (c *Conn) connect(addr string, clientData login.ClientData, identityData login.IdentityData) (err error) {
+	clientDataBytes, _ := json.Marshal(clientData)
+	identityDataBytes, _ := json.Marshal(identityData)
+
+	err = c.WritePacket(&packet2.ConnectionRequest{
+		Addr:         addr,
+		ClientData:   clientDataBytes,
+		IdentityData: identityDataBytes,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to write connect packet: %v", err)
+	}
+
+	connectionResponsePacket, err := c.expect(packet2.IDConnectionResponse, false)
+	if err != nil {
+		return fmt.Errorf("failed to read connection response packet: %v", err)
+	}
+
+	connectionResponse, _ := connectionResponsePacket.(*packet2.ConnectionResponse)
+	c.runtimeID = connectionResponse.RuntimeID
+	c.uniqueID = connectionResponse.UniqueID
+	return
 }

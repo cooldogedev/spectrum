@@ -4,20 +4,18 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 )
 
-type Connect struct {
+type ConnectionRequest struct {
 	Addr         string
-	EntityID     int64
 	ClientData   []byte
 	IdentityData []byte
 }
 
-func (pk *Connect) ID() uint32 {
-	return IDConnect
+func (pk *ConnectionRequest) ID() uint32 {
+	return IDConnectionRequest
 }
 
-func (pk *Connect) Marshal(io protocol.IO) {
+func (pk *ConnectionRequest) Marshal(io protocol.IO) {
 	io.String(&pk.Addr)
-	io.Varint64(&pk.EntityID)
 	io.ByteSlice(&pk.ClientData)
 	io.ByteSlice(&pk.IdentityData)
 }

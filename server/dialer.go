@@ -25,5 +25,5 @@ func (d Dialer) Dial(addr string) (*Conn, error) {
 		_ = tcpConn.SetWriteBuffer(1024 * 1024 * 8)
 	}
 	c := NewConn(conn, packet.NewServerPool())
-	return c, c.login(d.Origin, d.ClientData, d.IdentityData)
+	return c, c.connect(d.Origin, d.ClientData, d.IdentityData)
 }

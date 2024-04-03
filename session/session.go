@@ -60,6 +60,12 @@ func NewSession(clientConn *minecraft.Conn, logger internal.Logger, registry *Re
 			return
 		}
 
+		if err := serverConn.Spawn(); err != nil {
+			s.Close()
+			s.logger.Errorf("Failed to start spawn sequence: %v", err)
+			return
+		}
+
 		if err := clientConn.StartGame(serverConn.GameData()); err != nil {
 			s.Close()
 			s.logger.Errorf("Failed to start game timeout: %v", err)
