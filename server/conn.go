@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/cooldogedev/spectrum/internal"
 	proto "github.com/cooldogedev/spectrum/protocol"
@@ -204,12 +205,15 @@ func (c *Conn) decode(payload []byte) (pk packet.Packet, err error) {
 // login logs the connection into the server with the address, clientData and identityData passed. It returns
 // an error if the connection could not be logged in.
 func (c *Conn) login(addr string, clientData login.ClientData, identityData login.IdentityData) error {
+	clientDataBytes, _ := json.Marshal(clientData)
+	identityDataBytes, _ := json.Marshal(identityData)
+
 	err := c.WritePacket(&packet2.Connect{
 		Addr:     addr,
 		EntityID: computeEntityID(identityData.XUID),
 
-		ClientData:   clientData,
-		IdentityData: identityData,
+		ClientData:   clientDataBytes,
+		IdentityData: identityDataBytes,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to write connect packet: %v", err)
