@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/cooldogedev/spectrum/internal"
 	proto "github.com/cooldogedev/spectrum/protocol"
@@ -78,7 +79,7 @@ func NewConn(conn net.Conn, pool packet.Pool) *Conn {
 func (c *Conn) ReadPacket(decode bool) (any, error) {
 	select {
 	case <-c.closed:
-		return nil, fmt.Errorf("connection closed")
+		return nil, errors.New("connection closed")
 	default:
 		payload := c.reader.ReadPacket()
 		decompressed, err := c.compressor.Decompress(payload[1:])
@@ -236,13 +237,15 @@ func (c *Conn) RemoteAddr() net.Addr {
 }
 
 // Close ...
-func (c *Conn) Close() {
+func (c *Conn) Close() (err error) {
 	select {
 	case <-c.closed:
-		return
+		return errors.New("connection already closed")
 	default:
 		close(c.closed)
+		_ = c.WritePacket(&packet.Disconnect{})
 		_ = c.conn.Close()
+		return
 	}
 }
 
