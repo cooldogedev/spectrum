@@ -32,5 +32,5 @@ func (d Dialer) Dial(addr string) (*Conn, error) {
 		return nil, err
 	}
 	c := NewConn(conn, stream, packet.NewServerPool())
-	return c, c.login(d.Origin, d.ClientData, d.IdentityData)
+	return c, c.connect(d.Origin, d.ClientData, d.IdentityData)
 }

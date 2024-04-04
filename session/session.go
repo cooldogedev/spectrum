@@ -2,12 +2,12 @@ package session
 
 import (
 	"errors"
+	"github.com/cooldogedev/spectrum/internal"
+	"github.com/cooldogedev/spectrum/server"
+	"github.com/cooldogedev/spectrum/session/animation"
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
-	"github.com/spectrum-proxy/spectrum/internal"
-	"github.com/spectrum-proxy/spectrum/server"
-	"github.com/spectrum-proxy/spectrum/session/animation"
 	"sync"
 	"sync/atomic"
 )
@@ -31,7 +31,7 @@ type Session struct {
 	transferring atomic.Bool
 }
 
-func NewSession(clientConn *minecraft.Conn, logger internal.Logger, registry *Registry, addr string, latencyInterval int64) (s *Session, err error) {
+func NewSession(clientConn *minecraft.Conn, logger internal.Logger, registry *Registry, discovery server.Discovery, latencyInterval int64) (s *Session, err error) {
 	s = &Session{
 		clientConn: clientConn,
 
@@ -44,12 +44,25 @@ func NewSession(clientConn *minecraft.Conn, logger internal.Logger, registry *Re
 	}
 
 	go func() {
-		serverConn, err := s.dial(addr)
-		s.serverAddr = addr
+		serverAddr, err := discovery.Discover(clientConn)
+		if err != nil {
+			s.Close()
+			s.logger.Errorf("Failed to discover a server: %v", err)
+			return
+		}
+
+		serverConn, err := s.dial(serverAddr)
+		s.serverAddr = serverAddr
 		s.serverConn = serverConn
 		if err != nil {
 			s.Close()
 			s.logger.Errorf("Failed to dial server: %v", err)
+			return
+		}
+
+		if err := serverConn.Spawn(); err != nil {
+			s.Close()
+			s.logger.Errorf("Failed to start spawn sequence: %v", err)
 			return
 		}
 

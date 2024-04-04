@@ -1,10 +1,10 @@
 package spectrum
 
 import (
+	"github.com/cooldogedev/spectrum/internal"
+	"github.com/cooldogedev/spectrum/server"
+	"github.com/cooldogedev/spectrum/session"
 	"github.com/sandertv/gophertunnel/minecraft"
-	"github.com/spectrum-proxy/spectrum/internal"
-	"github.com/spectrum-proxy/spectrum/server"
-	"github.com/spectrum-proxy/spectrum/session"
 )
 
 type Spectrum struct {
@@ -49,16 +49,9 @@ func (s *Spectrum) Accept() (*session.Session, error) {
 		return nil, err
 	}
 
-	serverConn, err := s.discovery.Discover(conn.(*minecraft.Conn))
-	if err != nil {
-		_ = conn.Close()
-		return nil, err
-	}
-
-	newSession, err := session.NewSession(conn.(*minecraft.Conn), s.logger, s.registry, serverConn, s.opts.LatencyInterval)
+	newSession, err := session.NewSession(conn.(*minecraft.Conn), s.logger, s.registry, s.discovery, s.opts.LatencyInterval)
 	if err != nil {
 		s.logger.Errorf("Failed to create session: %v", err)
-		_ = conn.Close()
 		return nil, err
 	}
 

@@ -1,4 +1,4 @@
-module github.com/spectrum-proxy/spectrum
+module github.com/cooldogedev/spectrum
 
 go 1.22.1
 

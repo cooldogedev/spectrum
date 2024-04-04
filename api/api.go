@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/cooldogedev/spectrum/api/packet"
+	"github.com/cooldogedev/spectrum/internal"
+	"github.com/cooldogedev/spectrum/protocol"
+	"github.com/cooldogedev/spectrum/session"
 	"github.com/sirupsen/logrus"
-	"github.com/spectrum-proxy/spectrum/api/packet"
-	"github.com/spectrum-proxy/spectrum/internal"
-	"github.com/spectrum-proxy/spectrum/protocol"
-	"github.com/spectrum-proxy/spectrum/session"
 	"net"
 )
 

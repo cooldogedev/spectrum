@@ -1,11 +1,11 @@
 package main
 
 import (
+	"github.com/cooldogedev/spectrum"
+	"github.com/cooldogedev/spectrum/api"
+	"github.com/cooldogedev/spectrum/server"
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sirupsen/logrus"
-	"github.com/spectrum-proxy/spectrum"
-	"github.com/spectrum-proxy/spectrum/api"
-	"github.com/spectrum-proxy/spectrum/server"
 )
 
 func main() {

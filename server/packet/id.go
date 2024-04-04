@@ -1,7 +1,8 @@
 package packet
 
 const (
-	IDConnect = iota + 500
+	IDConnectionRequest = iota + 500
+	IDConnectionResponse
 	IDLatency
 	IDTransfer
 )
