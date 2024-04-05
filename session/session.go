@@ -98,11 +98,22 @@ func (s *Session) Transfer(addr string) error {
 		s.transferring.Store(false)
 	}()
 
-	s.sendMetadata(true)
 	conn, err := s.dial(addr)
 	if err != nil {
-		s.sendMetadata(false)
+		if conn != nil {
+			_ = conn.Close()
+		}
 		s.logger.Errorf("Failed to dial server: %v", err)
+		return err
+	}
+
+	s.sendMetadata(true)
+	if err := conn.Spawn(); err != nil {
+		if conn != nil {
+			_ = conn.Close()
+		}
+		s.sendMetadata(false)
+		s.logger.Errorf("Failed to start spawn sequence: %v", err)
 		return err
 	}
 
@@ -158,7 +169,7 @@ func (s *Session) Transfer(addr string) error {
 	})
 
 	s.animation.Clear(s.clientConn, serverGameData)
-	s.serverConn.Close()
+	_ = s.serverConn.Close()
 
 	s.serverAddr = addr
 	s.serverConn = conn
@@ -200,7 +211,7 @@ func (s *Session) Close() {
 		_ = s.clientConn.Close()
 
 		if s.serverConn != nil {
-			s.serverConn.Close()
+			_ = s.serverConn.Close()
 		}
 
 		identity := s.clientConn.IdentityData()
