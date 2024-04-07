@@ -2,18 +2,20 @@ package session
 
 import (
 	"errors"
+	"sync"
+	"sync/atomic"
+
 	"github.com/cooldogedev/spectrum/internal"
 	"github.com/cooldogedev/spectrum/server"
 	"github.com/cooldogedev/spectrum/session/animation"
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
-	"sync"
-	"sync/atomic"
 )
 
 type Session struct {
 	clientConn *minecraft.Conn
+	token string
 
 	serverAddr string
 	serverConn *server.Conn
@@ -31,9 +33,10 @@ type Session struct {
 	transferring atomic.Bool
 }
 
-func NewSession(clientConn *minecraft.Conn, logger internal.Logger, registry *Registry, discovery server.Discovery, latencyInterval int64) (s *Session, err error) {
+func NewSession(clientConn *minecraft.Conn, token string, logger internal.Logger, registry *Registry, discovery server.Discovery, latencyInterval int64) (s *Session, err error) {
 	s = &Session{
 		clientConn: clientConn,
+		token: token,
 
 		logger:   logger,
 		registry: registry,
@@ -223,6 +226,7 @@ func (s *Session) Close() {
 func (s *Session) dial(addr string) (*server.Conn, error) {
 	clientConn := s.clientConn
 	d := server.Dialer{
+		Token:        s.token,
 		Origin:       clientConn.RemoteAddr().String(),
 		ClientData:   clientConn.ClientData(),
 		IdentityData: clientConn.IdentityData(),

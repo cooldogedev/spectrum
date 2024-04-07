@@ -49,7 +49,7 @@ func (s *Spectrum) Accept() (*session.Session, error) {
 		return nil, err
 	}
 
-	newSession, err := session.NewSession(conn.(*minecraft.Conn), s.logger, s.registry, s.discovery, s.opts.LatencyInterval)
+	newSession, err := session.NewSession(conn.(*minecraft.Conn), s.opts.Token, s.logger, s.registry, s.discovery, s.opts.LatencyInterval)
 	if err != nil {
 		s.logger.Errorf("Failed to create session: %v", err)
 		return nil, err

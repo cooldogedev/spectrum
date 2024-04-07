@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"sync"
+
 	"github.com/cooldogedev/spectrum/internal"
 	proto "github.com/cooldogedev/spectrum/protocol"
 	packet2 "github.com/cooldogedev/spectrum/server/packet"
@@ -12,8 +15,6 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/login"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
-	"net"
-	"sync"
 )
 
 const (
@@ -300,15 +301,17 @@ func (c *Conn) expect(id uint32, deferrable bool) (pk packet.Packet, err error) 
 
 // connect send a connection request to the server with the address, clientData and identityData passed. It returns
 // an error if the server doesn't respond.
-func (c *Conn) connect(addr string, clientData login.ClientData, identityData login.IdentityData) (err error) {
+func (c *Conn) connect(addr string, token string, clientData login.ClientData, identityData login.IdentityData) (err error) {
 	clientDataBytes, _ := json.Marshal(clientData)
 	identityDataBytes, _ := json.Marshal(identityData)
 
 	err = c.WritePacket(&packet2.ConnectionRequest{
 		Addr:         addr,
+		Token:        token,
 		ClientData:   clientDataBytes,
 		IdentityData: identityDataBytes,
 	})
+
 	if err != nil {
 		return fmt.Errorf("failed to write connect packet: %v", err)
 	}
