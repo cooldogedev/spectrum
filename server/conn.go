@@ -46,7 +46,7 @@ type Conn struct {
 
 // NewConn creates a new Conn with the conn and pool passed.
 func NewConn(conn net.Conn, pool packet.Pool) *Conn {
-	c := &Conn{
+	return &Conn{
 		conn:       conn,
 		compressor: packet.FlateCompression,
 
@@ -58,20 +58,6 @@ func NewConn(conn net.Conn, pool packet.Pool) *Conn {
 
 		closed: make(chan struct{}),
 	}
-
-	go func() {
-		for {
-			select {
-			case <-c.closed:
-				return
-			default:
-				if err := c.reader.Read(); err != nil {
-					return
-				}
-			}
-		}
-	}()
-	return c
 }
 
 // ReadPacket reads a packet from the connection. It returns the packet read, or an error if the packet could not
@@ -81,7 +67,11 @@ func (c *Conn) ReadPacket(decode bool) (any, error) {
 	case <-c.closed:
 		return nil, errors.New("connection closed")
 	default:
-		payload := c.reader.ReadPacket()
+		payload, err := c.reader.ReadPacket()
+		if err != nil {
+			return nil, err
+		}
+
 		decompressed, err := c.compressor.Decompress(payload[1:])
 		if err != nil {
 			return nil, err

@@ -58,35 +58,20 @@ func (a *API) Close() error {
 func (a *API) handle(conn net.Conn) {
 	defer conn.Close()
 
-	closed := make(chan struct{})
 	reader := protocol.NewReader(conn)
-	go func() {
-		for {
-			select {
-			case <-closed:
-				return
-			default:
-				if err := reader.Read(); err != nil {
-					close(closed)
-					return
-				}
-			}
-		}
-	}()
-
 	for {
-		select {
-		case <-closed:
+		payload, err := reader.ReadPacket()
+		if err != nil {
+			a.logger.Errorf("Failed to read packet: %v", err)
 			return
-		default:
-			pk, err := a.decodePacket(reader.ReadPacket())
-			if err != nil {
-				a.logger.Errorf("Failed to decode packet: %v", err)
-				close(closed)
-				return
-			}
-			a.handlePacket(pk)
 		}
+
+		pk, err := a.decodePacket(payload)
+		if err != nil {
+			a.logger.Errorf("Failed to decode packet: %v", err)
+			return
+		}
+		a.handlePacket(pk)
 	}
 }
 

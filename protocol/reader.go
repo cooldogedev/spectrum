@@ -27,15 +27,33 @@ func NewReader(r readable) *Reader {
 	}
 }
 
-func (r *Reader) Read() (err error) {
+func (r *Reader) ReadPacket() ([]byte, error) {
+	select {
+	case packet := <-r.packets:
+		return packet, nil
+	default:
+		if err := r.read(); err != nil {
+			return nil, err
+		}
+		return r.ReadPacket()
+	}
+}
+
+func (r *Reader) read() (err error) {
 	if r.remaining <= 0 {
-		length, err := r.internalRead(packetLengthSize)
+		lengthBytes, err := r.internalRead(uint32(packetLengthSize - len(r.buf)))
 		if err != nil {
 			return err
 		}
-		r.remaining = binary.BigEndian.Uint32(length)
-	}
 
+		r.buf = append(r.buf, lengthBytes...)
+		if len(r.buf) < 4 {
+			return nil
+		}
+
+		r.remaining = binary.BigEndian.Uint32(r.buf)
+		r.buf = nil
+	}
 	data, err := r.internalRead(r.remaining)
 	if err != nil {
 		return err
@@ -47,17 +65,11 @@ func (r *Reader) Read() (err error) {
 		return
 	}
 
-	r.packets <- r.buf
+	pk := r.buf
 	r.buf = nil
 	r.remaining = 0
+	r.packets <- pk
 	return
-}
-
-func (r *Reader) ReadPacket() []byte {
-	select {
-	case packet := <-r.packets:
-		return packet
-	}
 }
 
 func (r *Reader) internalRead(n uint32) ([]byte, error) {
