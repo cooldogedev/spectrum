@@ -2,11 +2,12 @@ package session
 
 import (
 	"errors"
-	"github.com/cooldogedev/spectrum/server/packet"
-	packet2 "github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 	"net"
 	"strings"
 	"time"
+
+	"github.com/cooldogedev/spectrum/server/packet"
+	packet2 "github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
 func handleIncoming(s *Session) {

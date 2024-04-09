@@ -7,10 +7,12 @@ type Latency struct {
 	Timestamp int64
 }
 
+// ID ...
 func (pk *Latency) ID() uint32 {
 	return IDLatency
 }
 
+// Marshal ...
 func (pk *Latency) Marshal(io protocol.IO) {
 	io.Int64(&pk.Latency)
 	io.Int64(&pk.Timestamp)

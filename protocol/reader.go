@@ -1,8 +1,6 @@
 package protocol
 
-import (
-	"encoding/binary"
-)
+import "encoding/binary"
 
 const (
 	packetLengthSize = 4
@@ -54,6 +52,7 @@ func (r *Reader) read() (err error) {
 		r.remaining = binary.BigEndian.Uint32(r.buf)
 		r.buf = nil
 	}
+
 	data, err := r.internalRead(r.remaining)
 	if err != nil {
 		return err

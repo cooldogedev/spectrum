@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"net"
+
 	"github.com/cooldogedev/spectrum/api/packet"
 	"github.com/cooldogedev/spectrum/internal"
 	"github.com/cooldogedev/spectrum/protocol"
 	"github.com/cooldogedev/spectrum/session"
 	"github.com/sirupsen/logrus"
-	"net"
 )
 
 type API struct {

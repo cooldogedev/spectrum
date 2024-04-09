@@ -3,6 +3,7 @@ package protocol
 import (
 	"bytes"
 	"encoding/binary"
+
 	"github.com/cooldogedev/spectrum/internal"
 )
 

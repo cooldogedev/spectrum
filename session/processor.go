@@ -1,8 +1,6 @@
 package session
 
-import (
-	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
-)
+import "github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 
 // Processor is an interface that defines methods for processing incoming and outgoing packets in a session.
 type Processor interface {
