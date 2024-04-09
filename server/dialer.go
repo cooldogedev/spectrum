@@ -1,13 +1,15 @@
 package server
 
 import (
+	"net"
+
 	"github.com/sandertv/gophertunnel/minecraft/protocol/login"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
-	"net"
 )
 
 type Dialer struct {
 	Origin       string
+	Token 		 string
 	ClientData   login.ClientData
 	IdentityData login.IdentityData
 }
@@ -25,5 +27,5 @@ func (d Dialer) Dial(addr string) (*Conn, error) {
 		_ = tcpConn.SetWriteBuffer(1024 * 1024 * 8)
 	}
 	c := NewConn(conn, packet.NewServerPool())
-	return c, c.connect(d.Origin, d.ClientData, d.IdentityData)
+	return c, c.connect(d.Origin, d.Token, d.ClientData, d.IdentityData)
 }
