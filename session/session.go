@@ -101,6 +101,10 @@ func (s *Session) Transfer(addr string) error {
 		s.transferring.Store(false)
 	}()
 
+	if s.serverAddr == addr {
+		return errors.New("already connected to this server")
+	}
+
 	conn, err := s.dial(addr)
 	if err != nil {
 		if conn != nil {
