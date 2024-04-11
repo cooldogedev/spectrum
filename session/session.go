@@ -15,7 +15,7 @@ import (
 
 type Session struct {
 	clientConn *minecraft.Conn
-	token string
+	token      string
 
 	serverAddr string
 	serverConn *server.Conn
@@ -36,7 +36,7 @@ type Session struct {
 func NewSession(clientConn *minecraft.Conn, token string, logger internal.Logger, registry *Registry, discovery server.Discovery, latencyInterval int64) (s *Session, err error) {
 	s = &Session{
 		clientConn: clientConn,
-		token: token,
+		token:      token,
 
 		logger:   logger,
 		registry: registry,
@@ -182,6 +182,10 @@ func (s *Session) Transfer(addr string) error {
 	}
 	s.logger.Debugf("Transferred session for %s to %s", s.clientConn.IdentityData().DisplayName, addr)
 	return nil
+}
+
+func (s *Session) Animation() animation.Animation {
+	return s.animation
 }
 
 func (s *Session) SetAnimation(animation animation.Animation) {
