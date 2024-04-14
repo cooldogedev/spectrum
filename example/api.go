@@ -20,8 +20,8 @@ func main() {
 		return
 	}
 
-	a := api.NewAPI(logger, s.Registry())
-	if err := a.Listen(":19134"); err != nil {
+	a := api.NewAPI(s.Registry(), logger, nil)
+	if err := a.Listen(":19132"); err != nil {
 		logger.Errorf("Failed to listen on a: %v", err)
 		return
 	}

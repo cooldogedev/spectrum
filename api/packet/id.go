@@ -1,6 +1,8 @@
 package packet
 
 const (
-	IDKick = iota
+	IDConnectionRequest = iota
+	IDConnectionResponse
+	IDKick
 	IDTransfer
 )

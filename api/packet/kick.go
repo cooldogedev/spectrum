@@ -8,18 +8,18 @@ type Kick struct {
 }
 
 // ID ...
-func (k *Kick) ID() uint32 {
+func (pk *Kick) ID() uint32 {
 	return IDKick
 }
 
 // Encode ...
-func (k *Kick) Encode(buf *bytes.Buffer) {
-	writeString(buf, k.Reason)
-	writeString(buf, k.Username)
+func (pk *Kick) Encode(buf *bytes.Buffer) {
+	writeString(buf, pk.Reason)
+	writeString(buf, pk.Username)
 }
 
 // Decode ...
-func (k *Kick) Decode(buf *bytes.Buffer) {
-	k.Reason = readString(buf)
-	k.Username = readString(buf)
+func (pk *Kick) Decode(buf *bytes.Buffer) {
+	pk.Reason = readString(buf)
+	pk.Username = readString(buf)
 }

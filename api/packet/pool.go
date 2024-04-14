@@ -17,6 +17,8 @@ func NewPool() Pool {
 }
 
 func init() {
-	Register(IDTransfer, func() Packet { return &Transfer{} })
+	Register(IDConnectionRequest, func() Packet { return &ConnectionRequest{} })
+	Register(IDConnectionResponse, func() Packet { return &ConnectionResponse{} })
 	Register(IDKick, func() Packet { return &Kick{} })
+	Register(IDTransfer, func() Packet { return &Transfer{} })
 }

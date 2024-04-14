@@ -13,19 +13,25 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type Authentication interface {
+	Authenticate(token string) bool
+}
+
 type API struct {
-	logger   *logrus.Logger
-	sessions *session.Registry
+	authentication Authentication
+	sessions       *session.Registry
+	logger         *logrus.Logger
 
 	listener net.Listener
 	pool     packet.Pool
 }
 
-func NewAPI(logger *logrus.Logger, sessions *session.Registry) *API {
+func NewAPI(sessions *session.Registry, logger *logrus.Logger, authentication Authentication) *API {
 	return &API{
-		logger:   logger,
-		sessions: sessions,
-		pool:     packet.NewPool(),
+		authentication: authentication,
+		sessions:       sessions,
+		logger:         logger,
+		pool:           packet.NewPool(),
 	}
 }
 
@@ -34,7 +40,6 @@ func (a *API) Listen(addr string) error {
 	if err != nil {
 		return err
 	}
-
 	a.listener = listener
 	return nil
 }
@@ -44,7 +49,6 @@ func (a *API) Accept() error {
 	if err != nil {
 		return err
 	}
-
 	go a.handle(conn)
 	return nil
 }
@@ -60,6 +64,42 @@ func (a *API) handle(conn net.Conn) {
 	defer conn.Close()
 
 	reader := protocol.NewReader(conn)
+	writer := protocol.NewWriter(conn)
+	connectionRequestBytes, err := reader.ReadPacket()
+	if err != nil {
+		a.logger.Errorf("Failed to read connection request: %v", err)
+		return
+	}
+
+	connectionRequestPacket, err := a.decodePacket(connectionRequestBytes)
+	if err != nil {
+		a.logger.Errorf("Failed to decode connection request: %v", err)
+		_ = writer.Write(a.encodePacket(&packet.ConnectionResponse{
+			Response: packet.ResponseFail,
+		}))
+		return
+	}
+
+	connectionRequest, ok := connectionRequestPacket.(*packet.ConnectionRequest)
+	if !ok {
+		a.logger.Errorf("Expected connection request, received: %d", connectionRequest.ID())
+		_ = writer.Write(a.encodePacket(&packet.ConnectionResponse{
+			Response: packet.ResponseFail,
+		}))
+		return
+	}
+
+	if a.authentication != nil && !a.authentication.Authenticate(connectionRequest.Token) {
+		a.logger.Debugf("Closed unauthenticated connection from %s, token: %s", conn.RemoteAddr().String(), connectionRequest.Token)
+		_ = writer.Write(a.encodePacket(&packet.ConnectionResponse{
+			Response: packet.ResponseUnauthorized,
+		}))
+		return
+	}
+
+	_ = writer.Write(a.encodePacket(&packet.ConnectionResponse{
+		Response: packet.ResponseSuccess,
+	}))
 	for {
 		payload, err := reader.ReadPacket()
 		if err != nil {
@@ -97,6 +137,18 @@ func (a *API) decodePacket(payload []byte) (pk packet.Packet, err error) {
 	pk = factory()
 	pk.Decode(buf)
 	return
+}
+
+func (a *API) encodePacket(pk packet.Packet) []byte {
+	buf := internal.BufferPool.Get().(*bytes.Buffer)
+	defer func() {
+		buf.Reset()
+		internal.BufferPool.Put(buf)
+	}()
+
+	_ = binary.Write(buf, binary.LittleEndian, pk.ID())
+	pk.Encode(buf)
+	return buf.Bytes()
 }
 
 func (a *API) handlePacket(pk packet.Packet) {

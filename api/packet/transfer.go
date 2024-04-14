@@ -8,18 +8,18 @@ type Transfer struct {
 }
 
 // ID ...
-func (t *Transfer) ID() uint32 {
+func (pk *Transfer) ID() uint32 {
 	return IDTransfer
 }
 
 // Encode ...
-func (t *Transfer) Encode(buf *bytes.Buffer) {
-	writeString(buf, t.Addr)
-	writeString(buf, t.Username)
+func (pk *Transfer) Encode(buf *bytes.Buffer) {
+	writeString(buf, pk.Addr)
+	writeString(buf, pk.Username)
 }
 
 // Decode ...
-func (t *Transfer) Decode(buf *bytes.Buffer) {
-	t.Addr = readString(buf)
-	t.Username = readString(buf)
+func (pk *Transfer) Decode(buf *bytes.Buffer) {
+	pk.Addr = readString(buf)
+	pk.Username = readString(buf)
 }
