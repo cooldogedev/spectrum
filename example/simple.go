@@ -17,11 +17,7 @@ func main() {
 	}
 
 	for {
-		s, err := proxy.Accept()
-		if err != nil {
-			if s != nil {
-				s.Disconnect(err.Error())
-			}
+		if _, err := proxy.Accept(); err != nil {
 			logger.Errorf("Failed to accept session: %v", err)
 		}
 	}

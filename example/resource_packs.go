@@ -32,11 +32,7 @@ func main() {
 	}
 
 	for {
-		s, err := proxy.Accept()
-		if err != nil {
-			if s != nil {
-				s.Disconnect(err.Error())
-			}
+		if _, err := proxy.Accept(); err != nil {
 			logger.Errorf("Failed to accept session: %v", err)
 		}
 	}
@@ -50,20 +46,16 @@ func parse(keys map[string]string) ([]*resource.Pack, error) {
 	}
 
 	var packs []*resource.Pack
-
 	for _, entry := range entries {
 		pack, err := resource.ReadPath(path + entry.Name())
 		if err != nil {
 			return nil, err
 		}
 
-		key, ok := keys[pack.UUID()]
-		if ok {
+		if key, ok := keys[pack.UUID()]; ok {
 			pack.WithContentKey(key)
 		}
-
 		packs = append(packs, pack)
 	}
-
 	return packs, nil
 }
