@@ -3,7 +3,9 @@ package api
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 
 	"github.com/cooldogedev/spectrum/api/packet"
@@ -48,6 +50,13 @@ func (a *API) Accept() error {
 	conn, err := a.listener.Accept()
 	if err != nil {
 		return err
+	}
+
+	if conn, ok := conn.(*net.TCPConn); ok {
+		_ = conn.SetLinger(0)
+		_ = conn.SetNoDelay(true)
+		_ = conn.SetReadBuffer(1024 * 1024 * 8)
+		_ = conn.SetWriteBuffer(1024 * 1024 * 8)
 	}
 	go a.handle(conn)
 	return nil
@@ -103,7 +112,9 @@ func (a *API) handle(conn net.Conn) {
 	for {
 		payload, err := reader.ReadPacket()
 		if err != nil {
-			a.logger.Errorf("Failed to read packet: %v", err)
+			if !errors.Is(err, io.EOF) {
+				a.logger.Errorf("Failed to read packet: %v", err)
+			}
 			return
 		}
 
