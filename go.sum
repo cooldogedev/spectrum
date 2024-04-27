@@ -21,8 +21,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/sandertv/go-raknet v1.13.0 h1:Jkovqz4FrBP7PCIBBirBRoWm7mQKNP/UTYbOOyBK1TY=
 github.com/sandertv/go-raknet v1.13.0/go.mod h1:E/DgMFQUMvWOvXwQRLEsTNOoYqzNubfcgzqL0nMoPso=
-github.com/sandertv/gophertunnel v1.36.1-0.20240418151421-8b18f24c57f0 h1:n2E+rKz6L1loZ2tyZBP6Ys6urQPo3CMbZuOwtVMqN70=
-github.com/sandertv/gophertunnel v1.36.1-0.20240418151421-8b18f24c57f0/go.mod h1:4El8ZfEpUmOMIJhPt5SCc1PyLNiuQ2+grWczrBvSGVs=
+github.com/sandertv/gophertunnel v1.37.0 h1:yPzOp4W1GahLjtxldXa5K25saJK/XG7SiyEt6oMjm0I=
+github.com/sandertv/gophertunnel v1.37.0/go.mod h1:4El8ZfEpUmOMIJhPt5SCc1PyLNiuQ2+grWczrBvSGVs=
 github.com/scylladb/go-set v1.0.2 h1:SkvlMCKhP0wyyct6j+0IHJkBkSZL+TDzZ4E7f7BCcRE=
 github.com/scylladb/go-set v1.0.2/go.mod h1:DkpGd78rljTxKAnTDPFqXSGxvETQnJyuSOQwsHycqfs=
 github.com/sirupsen/logrus v1.9.3 h1:dueUQJ1C2q9oE3F7wvmSGAaVtTmUizReu6fjN8uqzbQ=
