@@ -15,10 +15,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type Authentication interface {
-	Authenticate(token string) bool
-}
-
 type API struct {
 	authentication Authentication
 	sessions       *session.Registry
