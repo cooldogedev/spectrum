@@ -33,7 +33,7 @@ func (r *Registry) GetSessionByUsername(username string) *Session {
 	defer r.mu.RUnlock()
 
 	for _, session := range r.sessions {
-		if strings.ToLower(session.clientConn.IdentityData().DisplayName) == strings.ToLower(username) {
+		if strings.EqualFold(session.clientConn.IdentityData().DisplayName, username) {
 			return session
 		}
 	}
