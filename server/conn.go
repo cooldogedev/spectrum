@@ -301,7 +301,6 @@ func (c *Conn) connect(addr string, token string, clientData login.ClientData, i
 		ClientData:   clientDataBytes,
 		IdentityData: identityDataBytes,
 	})
-
 	if err != nil {
 		return fmt.Errorf("failed to write connect packet: %v", err)
 	}

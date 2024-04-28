@@ -6,8 +6,7 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
-type Dimension struct {
-}
+type Dimension struct{}
 
 func (animation *Dimension) Play(conn *minecraft.Conn, serverGameData minecraft.GameData) {
 	var dimension int32
