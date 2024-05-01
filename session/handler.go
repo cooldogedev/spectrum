@@ -19,7 +19,7 @@ func handleIncoming(s *Session) {
 		}
 
 		server := s.Server()
-		pk, err := server.ReadPacket(s.processor != nil)
+		pk, err := server.ReadPacket(false)
 		if err != nil {
 			if server != s.Server() {
 				continue
