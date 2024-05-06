@@ -30,9 +30,9 @@ func main() {
 		s.SetAnimation(&animation.Fade{
 			Colour: color.RGBA{},
 			Timing: protocol.CameraFadeTimeData{
-				FadeInDuration:  0.5,
-				WaitDuration:    5.0,
-				FadeOutDuration: 0.5,
+				FadeInDuration:  0.25,
+				WaitDuration:    4.50,
+				FadeOutDuration: 0.25,
 			},
 		})
 	}
