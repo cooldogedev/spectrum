@@ -23,7 +23,7 @@ Spectrum offers an external TCP service for communication between downstream ser
 
 ### Discovery
 
-Spectrum introduces Discovery, a method for locating servers when players join. It handles connections asynchronously, determining the server address for connection or signaling disconnection errors. This process allows for blocking operations like database queries and HTTP requests. Spectrum also supports static discovery for consistent address use and can serve load balancing purposes.
+Spectrum introduces Discovery, a method for server determination when players join. It handles connections asynchronously, determining the server address for connection or signaling disconnection errors. This process allows for blocking operations like database queries and HTTP requests. In addition, Spectrum offers an in-built static discovery that maintains a constant server address. Furthermore, the discovery feature can also function as a server load balancer.
 
 ### Processor
 
