@@ -162,13 +162,20 @@ func (a *API) handlePacket(pk packet.Packet) {
 	switch pk := pk.(type) {
 	case *packet.Kick:
 		s := a.sessions.GetSessionByUsername(pk.Username)
-		if s != nil {
-			s.Disconnect(pk.Reason)
+		if s == nil {
+			a.logger.Debugf("Tried to disconnect an unknown player %s", pk.Username)
+			return
 		}
+		s.Disconnect(pk.Reason)
 	case *packet.Transfer:
 		s := a.sessions.GetSessionByUsername(pk.Username)
-		if s != nil {
-			_ = s.Transfer(pk.Addr)
+		if s == nil {
+			a.logger.Debugf("Tried to transfer an unknown player %s", pk.Username)
+			return
+		}
+
+		if err := s.Transfer(pk.Addr); err != nil {
+			a.logger.Errorf("Failed to transfer player %s: %v", pk.Username, err)
 		}
 	}
 }
