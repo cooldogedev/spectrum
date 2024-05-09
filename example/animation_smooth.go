@@ -1,6 +1,8 @@
 package main
 
 import (
+	"image/color"
+
 	"github.com/cooldogedev/spectrum"
 	"github.com/cooldogedev/spectrum/server"
 	"github.com/cooldogedev/spectrum/session/animation"
@@ -9,7 +11,6 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 	"github.com/sirupsen/logrus"
-	"image/color"
 )
 
 type smoothProcessor struct {

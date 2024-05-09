@@ -1,10 +1,10 @@
 package animation
 
 import (
-	"github.com/cooldogedev/spectrum/internal"
 	"image/color"
 	"time"
 
+	"github.com/cooldogedev/spectrum/internal"
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"

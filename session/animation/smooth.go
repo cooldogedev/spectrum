@@ -1,13 +1,14 @@
 package animation
 
 import (
+	"image/color"
+	"time"
+
 	"github.com/cooldogedev/spectrum/internal"
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
-	"image/color"
-	"time"
 )
 
 type Smooth struct {
