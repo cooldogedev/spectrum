@@ -1,6 +1,6 @@
 # Spectrum
 
-Spectrum is a blazingly fast, lightweight, and flexible Minecraft: Bedrock Edition proxy.
+Spectrum is a blazingly fast, lightweight, and easy to use Minecraft: Bedrock Edition proxy.
 
 [![Discord](https://img.shields.io/discord/1225942695604912279.svg?label=discord&color=7289DA&logo=discord&style=for-the-badge)](https://discord.com/invite/9TPKfeKvK2)
 
@@ -39,3 +39,5 @@ The `Processor` interface in Spectrum handles incoming and outgoing packets with
 4. **Lightweight and Fast**: Built for high performance with a lightweight architecture, capable of handling various connection loads efficiently.
 
 5. **Stateless**: Simplifies scalability with a stateless design, enhancing flexibility and efficiency in server management by not keeping track of registered servers within the proxy. Transfer between servers is as easy as sending Spectrum's transfer packet to the player from downstream servers.
+
+6. **Deterministic**: Takes a unique approach by sidestepping entity translations altogether, relying solely on deterministic entity identifiers provided by the downstream servers.
