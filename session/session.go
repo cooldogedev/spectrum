@@ -196,15 +196,20 @@ func (s *Session) SetAnimation(animation animation.Animation) {
 	s.animation = animation
 }
 
+func (s *Session) Processor() Processor {
+	return s.processor
+}
+
 func (s *Session) SetProcessor(processor Processor) {
 	s.processor = processor
 }
 
-func (s *Session) Disconnect(message string) {
-	_ = s.clientConn.WritePacket(&packet.Disconnect{
-		Message: message,
-	})
-	s.Close()
+func (s *Session) Latency() int64 {
+	return s.clientConn.Latency().Milliseconds() + s.latency
+}
+
+func (s *Session) Client() *minecraft.Conn {
+	return s.clientConn
 }
 
 func (s *Session) Server() *server.Conn {
@@ -213,8 +218,11 @@ func (s *Session) Server() *server.Conn {
 	return s.serverConn
 }
 
-func (s *Session) Latency() int64 {
-	return s.clientConn.Latency().Milliseconds() + s.latency
+func (s *Session) Disconnect(message string) {
+	_ = s.clientConn.WritePacket(&packet.Disconnect{
+		Message: message,
+	})
+	s.Close()
 }
 
 func (s *Session) Close() {
