@@ -49,8 +49,8 @@ func NewSession(clientConn *minecraft.Conn, token string, logger internal.Logger
 	go func() {
 		serverAddr, err := discovery.Discover(clientConn)
 		if err != nil {
-			s.Close()
-			s.logger.Errorf("Failed to discover a server: %v", err)
+			s.Disconnect(err.Error())
+			s.logger.Debugf("Failed to discover a server: %v", err)
 			return
 		}
 
