@@ -46,6 +46,7 @@ func NewSession(clientConn *minecraft.Conn, token string, logger internal.Logger
 		latency:   0,
 	}
 
+	s.serverMu.Lock()
 	go func() {
 		serverAddr, err := discovery.Discover(clientConn)
 		if err != nil {
@@ -57,6 +58,7 @@ func NewSession(clientConn *minecraft.Conn, token string, logger internal.Logger
 		serverConn, err := s.dial(serverAddr)
 		s.serverAddr = serverAddr
 		s.serverConn = serverConn
+		s.serverMu.Unlock()
 		if err != nil {
 			s.Close()
 			s.logger.Errorf("Failed to dial server: %v", err)
