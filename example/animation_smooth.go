@@ -17,8 +17,8 @@ type smoothProcessor struct {
 	consumer func(mgl32.Vec3, float32)
 }
 
-func (p *smoothProcessor) ProcessIncoming(packet.Packet) bool { return true }
-func (p *smoothProcessor) ProcessOutgoing(pk packet.Packet) bool {
+func (p *smoothProcessor) ProcessServer(packet.Packet) bool { return true }
+func (p *smoothProcessor) ProcessClient(pk packet.Packet) bool {
 	if pk, ok := pk.(*packet.PlayerAuthInput); ok {
 		p.consumer(pk.Position.Add(mgl32.Vec3{0, 1, 0}), pk.HeadYaw)
 	}

@@ -19,7 +19,7 @@ func handleIncoming(s *Session) {
 		}
 
 		server := s.Server()
-		pk, err := server.ReadPacket(false)
+		pk, err := server.ReadPacket()
 		if err != nil {
 			if server != s.Server() {
 				continue
@@ -39,7 +39,7 @@ func handleIncoming(s *Session) {
 				s.logger.Errorf("Failed to transfer: %v", err)
 			}
 		case packet2.Packet:
-			if s.processor != nil && !s.processor.ProcessIncoming(pk) {
+			if s.processor != nil && !s.processor.ProcessServer(pk) {
 				continue
 			}
 
@@ -73,7 +73,7 @@ func handleOutgoing(s *Session) {
 			return
 		}
 
-		if s.processor != nil && !s.processor.ProcessOutgoing(pk) {
+		if s.processor != nil && !s.processor.ProcessClient(pk) {
 			continue
 		}
 
