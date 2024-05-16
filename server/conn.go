@@ -64,6 +64,12 @@ func NewConn(conn net.Conn, pool packet.Pool) *Conn {
 // ReadPacket reads a packet from the connection. It returns the packet read, or an error if the packet could not
 // be read.
 func (c *Conn) ReadPacket() (any, error) {
+	if len(c.deferredPackets) > 0 {
+		pk := c.deferredPackets[0]
+		c.deferredPackets[0] = nil
+		c.deferredPackets = c.deferredPackets[1:]
+		return pk, nil
+	}
 	return c.read(false)
 }
 
