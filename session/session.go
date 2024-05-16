@@ -78,10 +78,6 @@ func NewSession(clientConn *minecraft.Conn, token string, logger internal.Logger
 		}
 
 		s.sendMetadata(true)
-		for _, pk := range serverConn.ReadDeferred() {
-			_ = clientConn.WritePacket(pk)
-		}
-
 		go handleIncoming(s)
 		go handleOutgoing(s)
 		go handleLatency(s, latencyInterval)
@@ -182,10 +178,6 @@ func (s *Session) Transfer(addr string) error {
 
 	s.serverAddr = addr
 	s.serverConn = conn
-
-	for _, pk := range conn.ReadDeferred() {
-		_ = s.clientConn.WritePacket(pk)
-	}
 	s.logger.Debugf("Transferred session for %s to %s", s.clientConn.IdentityData().DisplayName, addr)
 	return nil
 }

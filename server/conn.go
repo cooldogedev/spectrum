@@ -63,36 +63,8 @@ func NewConn(conn net.Conn, pool packet.Pool) *Conn {
 
 // ReadPacket reads a packet from the connection. It returns the packet read, or an error if the packet could not
 // be read.
-func (c *Conn) ReadPacket(decode bool) (any, error) {
-	select {
-	case <-c.closed:
-		return nil, errors.New("connection closed")
-	default:
-		payload, err := c.reader.ReadPacket()
-		if err != nil {
-			return nil, err
-		}
-
-		decompressed, err := c.compressor.Decompress(payload[1:])
-		if err != nil {
-			return nil, err
-		}
-
-		if payload[0] == packetDecodeNeeded || decode {
-			return c.decode(decompressed)
-		} else if payload[0] == packetDecodeNotNeeded {
-			return decompressed, nil
-		}
-		return nil, fmt.Errorf("received unknown decode marker byte %v", payload[0])
-	}
-}
-
-// ReadDeferred reads all packets deferred in the connection and returns them. It returns an empty slice if no
-// packets were deferred.
-func (c *Conn) ReadDeferred() []packet.Packet {
-	packets := c.deferredPackets
-	c.deferredPackets = nil
-	return packets
+func (c *Conn) ReadPacket() (any, error) {
+	return c.read(false)
 }
 
 // WritePacket writes a packet to the connection. It returns an error if the packet could not be written.
@@ -240,6 +212,32 @@ func (c *Conn) Close() (err error) {
 	}
 }
 
+// read reads a packet from the connection. It returns the packet read, or an error if the packet could not
+// be read.
+func (c *Conn) read(decode bool) (any, error) {
+	select {
+	case <-c.closed:
+		return nil, errors.New("connection closed")
+	default:
+		payload, err := c.reader.ReadPacket()
+		if err != nil {
+			return nil, err
+		}
+
+		decompressed, err := c.compressor.Decompress(payload[1:])
+		if err != nil {
+			return nil, err
+		}
+
+		if payload[0] == packetDecodeNeeded || decode {
+			return c.decode(decompressed)
+		} else if payload[0] == packetDecodeNotNeeded {
+			return decompressed, nil
+		}
+		return nil, fmt.Errorf("received unknown expect marker byte %v", payload[0])
+	}
+}
+
 // decode decodes a packet payload and returns the decoded packet or an error if the packet could not be decoded.
 func (c *Conn) decode(payload []byte) (pk packet.Packet, err error) {
 	buf := internal.BufferPool.Get().(*bytes.Buffer)
@@ -272,7 +270,7 @@ func (c *Conn) decode(payload []byte) (pk packet.Packet, err error) {
 // have the ID passed, it will be deferred and the function will be called again until a packet with the ID
 // passed is read. It returns the packet read, or an error if the packet could not be read.
 func (c *Conn) expect(id uint32, deferrable bool) (pk packet.Packet, err error) {
-	payload, err := c.ReadPacket(true)
+	payload, err := c.read(true)
 	if err != nil {
 		return nil, err
 	}
