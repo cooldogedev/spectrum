@@ -103,6 +103,10 @@ func (s *Session) Transfer(addr string) error {
 		return errors.New("already connected to this server")
 	}
 
+	if s.processor != nil && !s.processor.ProcessPreTransfer(addr) {
+		return errors.New("processor failed")
+	}
+
 	conn, err := s.dial(addr)
 	if err != nil {
 		if conn != nil {
@@ -175,9 +179,12 @@ func (s *Session) Transfer(addr string) error {
 
 	s.animation.Clear(s.clientConn, serverGameData)
 	_ = s.serverConn.Close()
-
 	s.serverAddr = addr
 	s.serverConn = conn
+
+	if s.processor != nil {
+		s.processor.ProcessPostTransfer(addr)
+	}
 	s.logger.Debugf("Transferred session for %s to %s", s.clientConn.IdentityData().DisplayName, addr)
 	return nil
 }
