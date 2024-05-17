@@ -228,14 +228,17 @@ func (s *Session) Disconnect(message string) {
 
 func (s *Session) Close() {
 	s.once.Do(func() {
+		identity := s.clientConn.IdentityData()
 		_ = s.clientConn.Close()
 
 		if s.serverConn != nil {
 			_ = s.serverConn.Close()
 		}
 
-		identity := s.clientConn.IdentityData()
 		s.registry.RemoveSession(identity.XUID)
+		if s.processor != nil {
+			s.processor.ProcessDisconnection()
+		}
 		s.logger.Infof("Closed session for %s", identity.DisplayName)
 	})
 }
