@@ -56,15 +56,14 @@ func NewSession(clientConn *minecraft.Conn, token string, logger internal.Logger
 		}
 
 		serverConn, err := s.dial(serverAddr)
-		s.serverAddr = serverAddr
-		s.serverConn = serverConn
-		s.serverMu.Unlock()
 		if err != nil {
 			s.Close()
 			s.logger.Errorf("Failed to dial server: %v", err)
 			return
 		}
 
+		s.serverAddr = serverAddr
+		s.serverConn = serverConn
 		if err := serverConn.Spawn(); err != nil {
 			s.Close()
 			s.logger.Errorf("Failed to start spawn sequence: %v", err)
@@ -78,11 +77,13 @@ func NewSession(clientConn *minecraft.Conn, token string, logger internal.Logger
 		}
 
 		s.sendMetadata(true)
+
 		go handleIncoming(s)
 		go handleOutgoing(s)
 		go handleLatency(s, latencyInterval)
 
 		s.registry.AddSession(clientConn.IdentityData().XUID, s)
+		s.serverMu.Unlock()
 		s.logger.Infof("Successfully started session for %s", clientConn.IdentityData().DisplayName)
 	}()
 	return
