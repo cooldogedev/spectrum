@@ -3,19 +3,16 @@ package protocol
 import (
 	"bytes"
 	"encoding/binary"
+	"io"
 
 	"github.com/cooldogedev/spectrum/internal"
 )
 
-type writable interface {
-	Write([]byte) (int, error)
-}
-
 type Writer struct {
-	w writable
+	w io.Writer
 }
 
-func NewWriter(w writable) *Writer {
+func NewWriter(w io.Writer) *Writer {
 	return &Writer{w: w}
 }
 
@@ -27,9 +24,12 @@ func (w *Writer) Write(data []byte) (err error) {
 	}()
 
 	if err = binary.Write(buf, binary.BigEndian, uint32(len(data))); err != nil {
-		return
+		return err
 	}
+
 	buf.Write(data)
-	_, err = w.w.Write(buf.Bytes())
+	if _, err := w.w.Write(buf.Bytes()); err != nil {
+		return err
+	}
 	return
 }

@@ -1,23 +1,22 @@
 package protocol
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"io"
+)
 
 const (
 	packetLengthSize = 4
 	packetFrameSize  = 1024 * 64
 )
 
-type readable interface {
-	Read([]byte) (int, error)
-}
-
 type Reader struct {
-	r         readable
+	r         io.Reader
 	buf       []byte
 	remaining uint32
 }
 
-func NewReader(r readable) *Reader {
+func NewReader(r io.Reader) *Reader {
 	return &Reader{r: r}
 }
 
@@ -64,7 +63,10 @@ func (r *Reader) readBytes(n uint32) ([]byte, error) {
 	if n > packetFrameSize {
 		n = packetFrameSize
 	}
+
 	data := make([]byte, n)
-	_, err := r.r.Read(data)
-	return data, err
+	if _, err := r.r.Read(data); err != nil {
+		return nil, err
+	}
+	return data, nil
 }
