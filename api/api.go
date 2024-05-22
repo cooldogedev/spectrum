@@ -1,16 +1,11 @@
 package api
 
 import (
-	"bytes"
-	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 
 	"github.com/cooldogedev/spectrum/api/packet"
-	"github.com/cooldogedev/spectrum/internal"
-	"github.com/cooldogedev/spectrum/protocol"
 	"github.com/cooldogedev/spectrum/session"
 	"github.com/sirupsen/logrus"
 )
@@ -18,10 +13,8 @@ import (
 type API struct {
 	authentication Authentication
 	sessions       *session.Registry
+	listener       net.Listener
 	logger         *logrus.Logger
-
-	listener net.Listener
-	pool     packet.Pool
 }
 
 func NewAPI(sessions *session.Registry, logger *logrus.Logger, authentication Authentication) *API {
@@ -29,7 +22,6 @@ func NewAPI(sessions *session.Registry, logger *logrus.Logger, authentication Au
 		authentication: authentication,
 		sessions:       sessions,
 		logger:         logger,
-		pool:           packet.NewPool(),
 	}
 }
 
@@ -54,7 +46,9 @@ func (a *API) Accept() error {
 		_ = conn.SetReadBuffer(1024 * 1024 * 8)
 		_ = conn.SetWriteBuffer(1024 * 1024 * 8)
 	}
+
 	go a.handle(conn)
+	a.logger.Infof("Accepted connection from %s", conn.RemoteAddr().String())
 	return nil
 }
 
@@ -66,47 +60,36 @@ func (a *API) Close() error {
 }
 
 func (a *API) handle(conn net.Conn) {
-	defer conn.Close()
+	defer func() {
+		a.logger.Infof("Disconnected connection from %s", conn.RemoteAddr().String())
+		_ = conn.Close()
+	}()
 
-	reader := protocol.NewReader(conn)
-	writer := protocol.NewWriter(conn)
-	connectionRequestBytes, err := reader.ReadPacket()
+	c := NewClient(conn, packet.NewPool())
+	connectionRequestPacket, err := c.ReadPacket()
 	if err != nil {
+		_ = c.WritePacket(&packet.ConnectionResponse{Response: packet.ResponseFail})
 		a.logger.Errorf("Failed to read connection request: %v", err)
-		return
-	}
-
-	connectionRequestPacket, err := a.decodePacket(connectionRequestBytes)
-	if err != nil {
-		a.logger.Errorf("Failed to decode connection request: %v", err)
-		_ = writer.Write(a.encodePacket(&packet.ConnectionResponse{
-			Response: packet.ResponseFail,
-		}))
 		return
 	}
 
 	connectionRequest, ok := connectionRequestPacket.(*packet.ConnectionRequest)
 	if !ok {
-		a.logger.Errorf("Expected connection request, received: %d", connectionRequest.ID())
-		_ = writer.Write(a.encodePacket(&packet.ConnectionResponse{
-			Response: packet.ResponseFail,
-		}))
+		_ = c.WritePacket(&packet.ConnectionResponse{Response: packet.ResponseFail})
+		a.logger.Errorf("Expected connection request, got: %d", connectionRequest.ID())
 		return
 	}
 
 	if a.authentication != nil && !a.authentication.Authenticate(connectionRequest.Token) {
+		_ = c.WritePacket(&packet.ConnectionResponse{Response: packet.ResponseUnauthorized})
 		a.logger.Debugf("Closed unauthenticated connection from %s, token: %s", conn.RemoteAddr().String(), connectionRequest.Token)
-		_ = writer.Write(a.encodePacket(&packet.ConnectionResponse{
-			Response: packet.ResponseUnauthorized,
-		}))
 		return
 	}
 
-	_ = writer.Write(a.encodePacket(&packet.ConnectionResponse{
-		Response: packet.ResponseSuccess,
-	}))
+	_ = c.WritePacket(&packet.ConnectionResponse{Response: packet.ResponseSuccess})
+	a.logger.Infof("Successfully authorized connection from %s", conn.RemoteAddr().String())
 	for {
-		payload, err := reader.ReadPacket()
+		pk, err := c.ReadPacket()
 		if err != nil {
 			if !errors.Is(err, io.EOF) {
 				a.logger.Errorf("Failed to read packet: %v", err)
@@ -114,68 +97,24 @@ func (a *API) handle(conn net.Conn) {
 			return
 		}
 
-		pk, err := a.decodePacket(payload)
-		if err != nil {
-			a.logger.Errorf("Failed to decode packet: %v", err)
-			return
-		}
-		a.handlePacket(pk)
-	}
-}
+		switch pk := pk.(type) {
+		case *packet.Kick:
+			s := a.sessions.GetSessionByUsername(pk.Username)
+			if s == nil {
+				a.logger.Debugf("Tried to disconnect an unknown player %s", pk.Username)
+				return
+			}
+			s.Disconnect(pk.Reason)
+		case *packet.Transfer:
+			s := a.sessions.GetSessionByUsername(pk.Username)
+			if s == nil {
+				a.logger.Debugf("Tried to transfer an unknown player %s", pk.Username)
+				return
+			}
 
-func (a *API) decodePacket(payload []byte) (pk packet.Packet, err error) {
-	buf := internal.BufferPool.Get().(*bytes.Buffer)
-	defer func() {
-		buf.Reset()
-		internal.BufferPool.Put(buf)
-
-		if r := recover(); r != nil {
-			err = fmt.Errorf("panic while decoding packet: %v", r)
-		}
-	}()
-
-	packetID := binary.LittleEndian.Uint32(payload[:4])
-	factory, ok := a.pool[packetID]
-	if !ok {
-		return nil, fmt.Errorf("unknown packet ID: %v", packetID)
-	}
-
-	buf.Write(payload[4:])
-	pk = factory()
-	pk.Decode(buf)
-	return
-}
-
-func (a *API) encodePacket(pk packet.Packet) []byte {
-	buf := internal.BufferPool.Get().(*bytes.Buffer)
-	defer func() {
-		buf.Reset()
-		internal.BufferPool.Put(buf)
-	}()
-
-	_ = binary.Write(buf, binary.LittleEndian, pk.ID())
-	pk.Encode(buf)
-	return buf.Bytes()
-}
-
-func (a *API) handlePacket(pk packet.Packet) {
-	switch pk := pk.(type) {
-	case *packet.Kick:
-		s := a.sessions.GetSessionByUsername(pk.Username)
-		if s == nil {
-			a.logger.Debugf("Tried to disconnect an unknown player %s", pk.Username)
-			return
-		}
-		s.Disconnect(pk.Reason)
-	case *packet.Transfer:
-		s := a.sessions.GetSessionByUsername(pk.Username)
-		if s == nil {
-			a.logger.Debugf("Tried to transfer an unknown player %s", pk.Username)
-			return
-		}
-
-		if err := s.Transfer(pk.Addr); err != nil {
-			a.logger.Errorf("Failed to transfer player %s: %v", pk.Username, err)
+			if err := s.Transfer(pk.Addr); err != nil {
+				a.logger.Errorf("Failed to transfer player %s: %v", pk.Username, err)
+			}
 		}
 	}
 }
