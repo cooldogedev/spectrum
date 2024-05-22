@@ -257,7 +257,7 @@ func (c *Conn) decode(payload []byte) (pk packet.Packet, err error) {
 		}
 	}()
 
-	header := packet.Header{}
+	header := &packet.Header{}
 	if err := header.Read(buf); err != nil {
 		return nil, err
 	}
