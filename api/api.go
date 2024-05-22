@@ -60,12 +60,12 @@ func (a *API) Close() error {
 }
 
 func (a *API) handle(conn net.Conn) {
+	c := NewClient(conn, packet.NewPool())
 	defer func() {
+		_ = c.Close()
 		a.logger.Infof("Disconnected connection from %s", conn.RemoteAddr().String())
-		_ = conn.Close()
 	}()
 
-	c := NewClient(conn, packet.NewPool())
 	connectionRequestPacket, err := c.ReadPacket()
 	if err != nil {
 		_ = c.WritePacket(&packet.ConnectionResponse{Response: packet.ResponseFail})

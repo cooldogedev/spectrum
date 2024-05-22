@@ -12,16 +12,20 @@ import (
 )
 
 type Client struct {
+	conn net.Conn
+	pool packet.Pool
+
 	writer *protocol.Writer
 	reader *protocol.Reader
-	pool   packet.Pool
 }
 
 func NewClient(conn net.Conn, pool packet.Pool) *Client {
 	return &Client{
+		conn: conn,
+		pool: pool,
+
 		reader: protocol.NewReader(conn),
 		writer: protocol.NewWriter(conn),
-		pool:   pool,
 	}
 }
 
@@ -70,4 +74,8 @@ func (c *Client) WritePacket(pk packet.Packet) error {
 
 	pk.Encode(buf)
 	return c.writer.Write(buf.Bytes())
+}
+
+func (c *Client) Close() error {
+	return c.conn.Close()
 }
