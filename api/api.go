@@ -6,18 +6,18 @@ import (
 	"net"
 
 	"github.com/cooldogedev/spectrum/api/packet"
+	"github.com/cooldogedev/spectrum/internal"
 	"github.com/cooldogedev/spectrum/session"
-	"github.com/sirupsen/logrus"
 )
 
 type API struct {
 	authentication Authentication
 	sessions       *session.Registry
 	listener       net.Listener
-	logger         *logrus.Logger
+	logger         internal.Logger
 }
 
-func NewAPI(sessions *session.Registry, logger *logrus.Logger, authentication Authentication) *API {
+func NewAPI(sessions *session.Registry, logger internal.Logger, authentication Authentication) *API {
 	return &API{
 		authentication: authentication,
 		sessions:       sessions,
