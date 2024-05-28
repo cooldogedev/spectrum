@@ -59,14 +59,15 @@ func (r *Reader) read() error {
 	return nil
 }
 
-func (r *Reader) readBytes(n uint32) ([]byte, error) {
-	if n > packetFrameSize {
-		n = packetFrameSize
+func (r *Reader) readBytes(length uint32) ([]byte, error) {
+	if length > packetFrameSize {
+		length = packetFrameSize
 	}
 
-	data := make([]byte, n)
-	if _, err := r.r.Read(data); err != nil {
+	data := make([]byte, length)
+	n, err := r.r.Read(data)
+	if err != nil {
 		return nil, err
 	}
-	return data, nil
+	return data[:n], nil
 }
