@@ -32,6 +32,8 @@ func NewSpectrum(discovery server.Discovery, logger internal.Logger, opts *util.
 		discovery: discovery,
 		transport: transport,
 
+		registry: session.NewRegistry(),
+
 		logger: logger,
 		opts:   opts,
 	}
@@ -45,7 +47,6 @@ func (s *Spectrum) Listen(config minecraft.ListenConfig) (err error) {
 	}
 
 	s.listener = listener
-	s.registry = session.NewRegistry()
 	s.logger.Infof("Started sprectrum on %v", listener.Addr())
 	return nil
 }
