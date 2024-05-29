@@ -20,8 +20,8 @@ func (t *TCP) Dial(addr string) (io.ReadWriteCloser, error) {
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		_ = tcpConn.SetNoDelay(true)
 		_ = tcpConn.SetLinger(0)
-		_ = tcpConn.SetReadBuffer(1024 * 1024 * 10)
-		_ = tcpConn.SetWriteBuffer(1024 * 1024 * 10)
+		_ = tcpConn.SetReadBuffer(1024 * 1024 * 8)
+		_ = tcpConn.SetWriteBuffer(1024 * 1024 * 8)
 	}
 	return conn, nil
 }
