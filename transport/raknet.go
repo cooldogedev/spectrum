@@ -1,8 +1,9 @@
 package transport
 
 import (
-	"github.com/sandertv/gophertunnel/minecraft"
 	"io"
+
+	"github.com/sandertv/gophertunnel/minecraft"
 )
 
 type RakNet struct{}
