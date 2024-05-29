@@ -11,7 +11,7 @@ import (
 
 func main() {
 	logger := logrus.New()
-	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery("10.244.4.97:19132"), logger, nil, transport.NewQUIC(logger))
+	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery(":19133"), logger, nil, transport.NewQUIC(logger))
 	if err := proxy.Listen(minecraft.ListenConfig{StatusProvider: util.NewStatusProvider("Spectrum Proxy")}); err != nil {
 		logger.Errorf("Failed to listen on proxy: %v", err)
 		return
