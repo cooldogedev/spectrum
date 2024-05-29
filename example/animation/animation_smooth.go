@@ -6,6 +6,7 @@ import (
 	"github.com/cooldogedev/spectrum"
 	"github.com/cooldogedev/spectrum/server"
 	"github.com/cooldogedev/spectrum/session/animation"
+	"github.com/cooldogedev/spectrum/util"
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
@@ -31,9 +32,8 @@ func (p *smoothProcessor) ProcessClient(pk packet.Packet) bool {
 
 func main() {
 	logger := logrus.New()
-	listenConfig := minecraft.ListenConfig{StatusProvider: spectrum.NewStatusProvider("Spectrum Proxy")}
-	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery(":19133"), logger, nil)
-	if err := proxy.Listen(listenConfig); err != nil {
+	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery(":19133"), logger, nil, nil)
+	if err := proxy.Listen(minecraft.ListenConfig{StatusProvider: util.NewStatusProvider("Spectrum Proxy")}); err != nil {
 		logger.Errorf("Failed to listen on proxy: %v", err)
 		return
 	}

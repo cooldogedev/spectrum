@@ -8,6 +8,8 @@ import (
 	"github.com/cooldogedev/spectrum/internal"
 	"github.com/cooldogedev/spectrum/server"
 	"github.com/cooldogedev/spectrum/session/animation"
+	"github.com/cooldogedev/spectrum/transport"
+	"github.com/cooldogedev/spectrum/util"
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
@@ -15,7 +17,6 @@ import (
 
 type Session struct {
 	clientConn *minecraft.Conn
-	token      string
 
 	serverAddr string
 	serverConn *server.Conn
@@ -23,6 +24,9 @@ type Session struct {
 
 	logger   internal.Logger
 	registry *Registry
+
+	opts      *util.Opts
+	transport transport.Transport
 
 	animation animation.Animation
 	processor Processor
@@ -33,10 +37,12 @@ type Session struct {
 	transferring atomic.Bool
 }
 
-func NewSession(clientConn *minecraft.Conn, token string, logger internal.Logger, registry *Registry, discovery server.Discovery, latencyInterval int64) (s *Session, err error) {
+func NewSession(clientConn *minecraft.Conn, logger internal.Logger, discovery server.Discovery, opts *util.Opts, registry *Registry, transport transport.Transport) (s *Session, err error) {
 	s = &Session{
 		clientConn: clientConn,
-		token:      token,
+
+		opts:      opts,
+		transport: transport,
 
 		logger:   logger,
 		registry: registry,
@@ -48,6 +54,8 @@ func NewSession(clientConn *minecraft.Conn, token string, logger internal.Logger
 
 	s.serverMu.Lock()
 	go func() {
+		defer s.serverMu.Unlock()
+
 		serverAddr, err := discovery.Discover(clientConn)
 		if err != nil {
 			s.Disconnect(err.Error())
@@ -80,10 +88,9 @@ func NewSession(clientConn *minecraft.Conn, token string, logger internal.Logger
 
 		go handleIncoming(s)
 		go handleOutgoing(s)
-		go handleLatency(s, latencyInterval)
+		go handleLatency(s, opts.LatencyInterval)
 
 		s.registry.AddSession(clientConn.IdentityData().XUID, s)
-		s.serverMu.Unlock()
 		s.logger.Infof("Successfully started session for %s", clientConn.IdentityData().DisplayName)
 	}()
 	return
@@ -245,14 +252,12 @@ func (s *Session) Close() {
 }
 
 func (s *Session) dial(addr string) (*server.Conn, error) {
-	clientConn := s.clientConn
-	d := server.Dialer{
-		Token:        s.token,
-		Origin:       clientConn.RemoteAddr().String(),
-		ClientData:   clientConn.ClientData(),
-		IdentityData: clientConn.IdentityData(),
+	conn, err := s.transport.Dial(addr)
+	if err != nil {
+		return nil, err
 	}
-	return d.Dial(addr)
+	c := server.NewConn(conn, packet.NewServerPool())
+	return c, c.Connect(s.clientConn, s.opts.Token)
 }
 
 func (s *Session) sendMetadata(noAI bool) {

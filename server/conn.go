@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
+	"io"
 	"sync"
 
 	"github.com/cooldogedev/spectrum/internal"
@@ -13,7 +13,6 @@ import (
 	packet2 "github.com/cooldogedev/spectrum/server/packet"
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
-	"github.com/sandertv/gophertunnel/minecraft/protocol/login"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
@@ -22,10 +21,12 @@ const (
 	packetDecodeNotNeeded = 0x01
 )
 
+const shieldRuntimeID = "minecraft:shield"
+
 // Conn is a connection to a server. It is used to read and write packets to the server, and to manage the
 // connection to the server.
 type Conn struct {
-	conn       net.Conn
+	conn       io.ReadWriteCloser
 	compressor packet.Compression
 
 	reader *proto.Reader
@@ -46,7 +47,7 @@ type Conn struct {
 }
 
 // NewConn creates a new Conn with the conn and pool passed.
-func NewConn(conn net.Conn, pool packet.Pool) *Conn {
+func NewConn(conn io.ReadWriteCloser, pool packet.Pool) *Conn {
 	return &Conn{
 		conn:       conn,
 		compressor: packet.FlateCompression,
@@ -97,6 +98,33 @@ func (c *Conn) WritePacket(pk packet.Packet) error {
 	return c.writer.Write(data)
 }
 
+// Connect send a connection request to the server with the client and token passed. It returns
+// an error if the server doesn't respond.
+func (c *Conn) Connect(client *minecraft.Conn, token string) (err error) {
+	clientDataBytes, _ := json.Marshal(client.ClientData())
+	identityDataBytes, _ := json.Marshal(client.IdentityData())
+
+	err = c.WritePacket(&packet2.ConnectionRequest{
+		Addr:         client.RemoteAddr().String(),
+		Token:        token,
+		ClientData:   clientDataBytes,
+		IdentityData: identityDataBytes,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to write connection request packet: %v", err)
+	}
+
+	connectionResponsePacket, err := c.expect(packet2.IDConnectionResponse, false)
+	if err != nil {
+		return fmt.Errorf("failed to read connection response packet: %v", err)
+	}
+
+	connectionResponse, _ := connectionResponsePacket.(*packet2.ConnectionResponse)
+	c.runtimeID = connectionResponse.RuntimeID
+	c.uniqueID = connectionResponse.UniqueID
+	return
+}
+
 // Spawn will start the spawning sequence using the game data found in conn.GameData(), which was
 // sent earlier by the server.
 func (c *Conn) Spawn() (err error) {
@@ -105,8 +133,7 @@ func (c *Conn) Spawn() (err error) {
 		return fmt.Errorf("failed to read start game packet: %v", err)
 	}
 
-	err = c.WritePacket(&packet.RequestChunkRadius{ChunkRadius: 16})
-	if err != nil {
+	if err := c.WritePacket(&packet.RequestChunkRadius{ChunkRadius: 16}); err != nil {
 		return fmt.Errorf("failed to write request chunk radius packet: %v", err)
 	}
 
@@ -115,82 +142,55 @@ func (c *Conn) Spawn() (err error) {
 		return fmt.Errorf("failed to read chunk radius updated packet: %v", err)
 	}
 
-	_, err = c.expect(packet.IDPlayStatus, true)
-	if err != nil {
+	if _, err := c.expect(packet.IDPlayStatus, true); err != nil {
 		return fmt.Errorf("failed to read play status packet: %v", err)
 	}
 
-	err = c.WritePacket(&packet.SetLocalPlayerAsInitialised{
-		EntityRuntimeID: startGamePacket.(*packet.StartGame).EntityRuntimeID,
-	})
-	if err != nil {
+	if err := c.WritePacket(&packet.SetLocalPlayerAsInitialised{EntityRuntimeID: c.runtimeID}); err != nil {
 		return fmt.Errorf("failed to write set local player as initialised packet: %v", err)
 	}
 
 	startGame := startGamePacket.(*packet.StartGame)
-	chunkRadiusUpdated := chunkRadiusUpdatedPacket.(*packet.ChunkRadiusUpdated)
-
 	for _, item := range startGame.Items {
-		if item.Name == "minecraft:shield" {
+		if item.Name == shieldRuntimeID {
 			c.shieldID = int32(item.RuntimeID)
 			break
 		}
 	}
 
 	c.gameData = minecraft.GameData{
-		WorldName:  startGame.WorldName,
-		WorldSeed:  startGame.WorldSeed,
-		Difficulty: startGame.Difficulty,
-
-		EntityUniqueID:  c.uniqueID,
-		EntityRuntimeID: c.runtimeID,
-
-		PlayerGameMode: startGame.PlayerGameMode,
-
-		PersonaDisabled:     startGame.PersonaDisabled,
-		CustomSkinsDisabled: startGame.CustomSkinsDisabled,
-
-		BaseGameVersion: startGame.BaseGameVersion,
-
-		PlayerPosition: startGame.PlayerPosition,
-		Pitch:          startGame.Pitch,
-		Yaw:            startGame.Yaw,
-
-		Dimension: startGame.Dimension,
-
-		WorldSpawn: startGame.WorldSpawn,
-
-		EditorWorldType:    startGame.EditorWorldType,
-		CreatedInEditor:    startGame.CreatedInEditor,
-		ExportedFromEditor: startGame.ExportedFromEditor,
-
-		WorldGameMode: startGame.WorldGameMode,
-
-		GameRules: startGame.GameRules,
-
-		Time: startGame.Time,
-
-		ServerBlockStateChecksum: startGame.ServerBlockStateChecksum,
-		CustomBlocks:             startGame.Blocks,
-
-		Items: startGame.Items,
-
+		WorldName:                    startGame.WorldName,
+		WorldSeed:                    startGame.WorldSeed,
+		Difficulty:                   startGame.Difficulty,
+		EntityUniqueID:               c.uniqueID,
+		EntityRuntimeID:              c.runtimeID,
+		PlayerGameMode:               startGame.PlayerGameMode,
+		PersonaDisabled:              startGame.PersonaDisabled,
+		CustomSkinsDisabled:          startGame.CustomSkinsDisabled,
+		BaseGameVersion:              startGame.BaseGameVersion,
+		PlayerPosition:               startGame.PlayerPosition,
+		Pitch:                        startGame.Pitch,
+		Yaw:                          startGame.Yaw,
+		Dimension:                    startGame.Dimension,
+		WorldSpawn:                   startGame.WorldSpawn,
+		EditorWorldType:              startGame.EditorWorldType,
+		CreatedInEditor:              startGame.CreatedInEditor,
+		ExportedFromEditor:           startGame.ExportedFromEditor,
+		WorldGameMode:                startGame.WorldGameMode,
+		GameRules:                    startGame.GameRules,
+		Time:                         startGame.Time,
+		ServerBlockStateChecksum:     startGame.ServerBlockStateChecksum,
+		CustomBlocks:                 startGame.Blocks,
+		Items:                        startGame.Items,
 		PlayerMovementSettings:       startGame.PlayerMovementSettings,
 		ServerAuthoritativeInventory: startGame.ServerAuthoritativeInventory,
-
-		Experiments: startGame.Experiments,
-
-		PlayerPermissions: startGame.PlayerPermissions,
-
-		ChunkRadius: chunkRadiusUpdated.ChunkRadius,
-
-		ClientSideGeneration: startGame.ClientSideGeneration,
-
-		ChatRestrictionLevel: startGame.ChatRestrictionLevel,
-
-		DisablePlayerInteractions: startGame.DisablePlayerInteractions,
-
-		UseBlockNetworkIDHashes: startGame.UseBlockNetworkIDHashes,
+		Experiments:                  startGame.Experiments,
+		PlayerPermissions:            startGame.PlayerPermissions,
+		ChunkRadius:                  chunkRadiusUpdatedPacket.(*packet.ChunkRadiusUpdated).ChunkRadius,
+		ClientSideGeneration:         startGame.ClientSideGeneration,
+		ChatRestrictionLevel:         startGame.ChatRestrictionLevel,
+		DisablePlayerInteractions:    startGame.DisablePlayerInteractions,
+		UseBlockNetworkIDHashes:      startGame.UseBlockNetworkIDHashes,
 	}
 	return
 }
@@ -198,11 +198,6 @@ func (c *Conn) Spawn() (err error) {
 // GameData ...
 func (c *Conn) GameData() minecraft.GameData {
 	return c.gameData
-}
-
-// RemoteAddr ...
-func (c *Conn) RemoteAddr() net.Addr {
-	return c.conn.RemoteAddr()
 }
 
 // Close ...
@@ -290,32 +285,5 @@ func (c *Conn) expect(id uint32, deferrable bool) (pk packet.Packet, err error) 
 	if deferrable {
 		c.deferredPackets = append(c.deferredPackets, pk)
 	}
-	return
-}
-
-// connect send a connection request to the server with the address, clientData and identityData passed. It returns
-// an error if the server doesn't respond.
-func (c *Conn) connect(addr string, token string, clientData login.ClientData, identityData login.IdentityData) (err error) {
-	clientDataBytes, _ := json.Marshal(clientData)
-	identityDataBytes, _ := json.Marshal(identityData)
-
-	err = c.WritePacket(&packet2.ConnectionRequest{
-		Addr:         addr,
-		Token:        token,
-		ClientData:   clientDataBytes,
-		IdentityData: identityDataBytes,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to write connect packet: %v", err)
-	}
-
-	connectionResponsePacket, err := c.expect(packet2.IDConnectionResponse, false)
-	if err != nil {
-		return fmt.Errorf("failed to read connection response packet: %v", err)
-	}
-
-	connectionResponse, _ := connectionResponsePacket.(*packet2.ConnectionResponse)
-	c.runtimeID = connectionResponse.RuntimeID
-	c.uniqueID = connectionResponse.UniqueID
 	return
 }

@@ -3,15 +3,15 @@ package main
 import (
 	"github.com/cooldogedev/spectrum"
 	"github.com/cooldogedev/spectrum/server"
+	"github.com/cooldogedev/spectrum/util"
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sirupsen/logrus"
 )
 
 func main() {
 	logger := logrus.New()
-	listenConfig := minecraft.ListenConfig{StatusProvider: spectrum.NewStatusProvider("Spectrum Proxy")}
-	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery(":19133"), logger, nil)
-	if err := proxy.Listen(listenConfig); err != nil {
+	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery(":19133"), logger, nil, nil)
+	if err := proxy.Listen(minecraft.ListenConfig{StatusProvider: util.NewStatusProvider("Spectrum Proxy")}); err != nil {
 		logger.Errorf("Failed to listen on proxy: %v", err)
 		return
 	}

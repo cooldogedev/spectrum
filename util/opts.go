@@ -1,4 +1,4 @@
-package spectrum
+package util
 
 type Opts struct {
 	// Addr is the address to listen on.

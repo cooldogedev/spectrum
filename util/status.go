@@ -1,4 +1,4 @@
-package spectrum
+package util
 
 import "github.com/sandertv/gophertunnel/minecraft"
 
