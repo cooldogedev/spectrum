@@ -73,6 +73,10 @@ func handleOutgoing(s *Session) {
 			return
 		}
 
+		if violation, ok := pk.(*packet2.PacketViolationWarning); ok {
+			s.logger.Errorf("Received packet violation warning: PacketID=%v, Context=%v, Severity=%v, Type=%v", violation.PacketID, violation.ViolationContext, violation.Severity, violation.Type)
+		}
+
 		if s.processor != nil && !s.processor.ProcessClient(pk) {
 			continue
 		}
