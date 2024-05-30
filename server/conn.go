@@ -218,7 +218,7 @@ func (c *Conn) Close() (err error) {
 func (c *Conn) read(decode bool) (any, error) {
 	select {
 	case <-c.closed:
-		return nil, errors.New("connection closed")
+		return nil, errors.New("closed connection")
 	default:
 		payload, err := c.reader.ReadPacket()
 		if err != nil {

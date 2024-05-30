@@ -10,6 +10,12 @@ import (
 	packet2 "github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
+const (
+	errStreamClosed  = "closed stream"
+	errConnClosed    = "closed connection"
+	errNetworkClosed = "closed network connection"
+)
+
 func handleIncoming(s *Session) {
 	defer s.Close()
 
@@ -25,7 +31,7 @@ func handleIncoming(s *Session) {
 				continue
 			}
 
-			if !errors.Is(err, net.ErrClosed) {
+			if !errors.Is(err, net.ErrClosed) && !strings.Contains(err.Error(), errConnClosed) {
 				s.logger.Errorf("Failed to read packet from server: %v", err)
 			}
 			return
@@ -67,7 +73,7 @@ func handleOutgoing(s *Session) {
 
 		pk, err := s.clientConn.ReadPacket()
 		if err != nil {
-			if !strings.Contains(err.Error(), "use of closed network connection") {
+			if !strings.Contains(err.Error(), errNetworkClosed) {
 				s.logger.Errorf("Failed to read packet from client: %v", err)
 			}
 			return
@@ -100,7 +106,7 @@ func handleLatency(s *Session, interval int64) {
 			Timestamp: time.Now().UnixMilli(),
 		})
 		if err != nil {
-			if !errors.Is(err, net.ErrClosed) {
+			if !errors.Is(err, net.ErrClosed) && !strings.Contains(err.Error(), errStreamClosed) {
 				s.logger.Errorf("Failed to send latency packet: %v", err)
 			}
 			return
