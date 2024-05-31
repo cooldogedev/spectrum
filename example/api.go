@@ -18,7 +18,7 @@ func main() {
 	}
 
 	go func() {
-		a := api.NewAPI(proxy.Registry(), logger, api.NewSecretBasedAuthentication(""))
+		a := api.NewAPI(proxy.Registry(), logger, nil)
 		if err := a.Listen(":19132"); err != nil {
 			logger.Errorf("Failed to listen on a: %v", err)
 			return
