@@ -125,6 +125,15 @@ func (s *Session) Transfer(addr string) error {
 	}
 
 	s.sendMetadata(true)
+	if err := conn.Connect(s.clientConn, s.opts.Token); err != nil {
+		if conn != nil {
+			_ = conn.Close()
+		}
+		s.sendMetadata(false)
+		s.logger.Errorf("Failed to start connection sequence: %v", err)
+		return err
+	}
+
 	if err := conn.Spawn(); err != nil {
 		if conn != nil {
 			_ = conn.Close()
