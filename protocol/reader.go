@@ -2,18 +2,12 @@ package protocol
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 )
 
-const (
-	packetLengthSize = 4
-	packetFrameSize  = 1024 * 64
-)
-
 type Reader struct {
-	r         io.Reader
-	buf       []byte
-	remaining uint32
+	r io.Reader
 }
 
 func NewReader(r io.Reader) *Reader {
@@ -21,53 +15,14 @@ func NewReader(r io.Reader) *Reader {
 }
 
 func (r *Reader) ReadPacket() ([]byte, error) {
-	if r.remaining <= 0 && r.buf != nil {
-		pk := r.buf
-		r.buf = nil
-		return pk, nil
+	var length uint32
+	if err := binary.Read(r.r, binary.BigEndian, &length); err != nil {
+		return nil, fmt.Errorf("failed to read packet length: %w", err)
 	}
 
-	if err := r.read(); err != nil {
-		return nil, err
+	pk := make([]byte, length)
+	if _, err := io.ReadFull(r.r, pk); err != nil {
+		return nil, fmt.Errorf("failed to read packet data: %w", err)
 	}
-	return r.ReadPacket()
-}
-
-func (r *Reader) read() error {
-	if r.remaining <= 0 {
-		lengthBytes, err := r.readBytes(uint32(packetLengthSize - len(r.buf)))
-		if err != nil {
-			return err
-		}
-
-		r.buf = append(r.buf, lengthBytes...)
-		if len(r.buf) < 4 {
-			return nil
-		}
-
-		r.remaining = binary.BigEndian.Uint32(r.buf)
-		r.buf = nil
-	}
-
-	data, err := r.readBytes(r.remaining)
-	if err != nil {
-		return err
-	}
-
-	r.buf = append(r.buf, data...)
-	r.remaining -= uint32(len(data))
-	return nil
-}
-
-func (r *Reader) readBytes(length uint32) ([]byte, error) {
-	if length > packetFrameSize {
-		length = packetFrameSize
-	}
-
-	data := make([]byte, length)
-	n, err := r.r.Read(data)
-	if err != nil {
-		return nil, err
-	}
-	return data[:n], nil
+	return pk, nil
 }
