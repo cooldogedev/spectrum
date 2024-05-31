@@ -73,6 +73,12 @@ func NewSession(clientConn *minecraft.Conn, logger internal.Logger, discovery se
 
 		s.serverAddr = serverAddr
 		s.serverConn = serverConn
+		if err := serverConn.Connect(clientConn, opts.Token); err != nil {
+			s.Close()
+			s.logger.Errorf("Failed to start connection sequence: %v", err)
+			return
+		}
+
 		if err := serverConn.Spawn(); err != nil {
 			s.Close()
 			s.logger.Errorf("Failed to start spawn sequence: %v", err)
@@ -263,8 +269,7 @@ func (s *Session) dial(addr string) (*server.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := server.NewConn(conn, packet.NewServerPool())
-	return c, c.Connect(s.clientConn, s.opts.Token)
+	return server.NewConn(conn, packet.NewServerPool()), nil
 }
 
 func (s *Session) sendMetadata(noAI bool) {
