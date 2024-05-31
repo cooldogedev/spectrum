@@ -2,6 +2,7 @@ package session
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -120,8 +121,7 @@ func (s *Session) Transfer(addr string) error {
 		if conn != nil {
 			_ = conn.Close()
 		}
-		s.logger.Errorf("Failed to dial server: %v", err)
-		return err
+		return fmt.Errorf("failed to dial server: %v", err)
 	}
 
 	s.sendMetadata(true)
@@ -130,8 +130,7 @@ func (s *Session) Transfer(addr string) error {
 			_ = conn.Close()
 		}
 		s.sendMetadata(false)
-		s.logger.Errorf("Failed to start connection sequence: %v", err)
-		return err
+		return fmt.Errorf("failed to start connection sequence: %v", err)
 	}
 
 	if err := conn.Spawn(); err != nil {
@@ -139,8 +138,7 @@ func (s *Session) Transfer(addr string) error {
 			_ = conn.Close()
 		}
 		s.sendMetadata(false)
-		s.logger.Errorf("Failed to start spawn sequence: %v", err)
-		return err
+		return fmt.Errorf("failed to start spawn sequence: %v", err)
 	}
 
 	serverGameData := conn.GameData()
