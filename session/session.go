@@ -218,6 +218,14 @@ func (s *Session) SetAnimation(animation animation.Animation) {
 	s.animation = animation
 }
 
+func (s *Session) Opts() *util.Opts {
+	return s.opts
+}
+
+func (s *Session) SetOpts(opts *util.Opts) {
+	s.opts = opts
+}
+
 func (s *Session) Processor() Processor {
 	return s.processor
 }
