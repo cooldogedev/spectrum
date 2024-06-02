@@ -1,8 +1,11 @@
 package util
 
+// Opts defines the configuration options for Spectrum.
 type Opts struct {
 	// Addr is the address to listen on.
 	Addr string `yaml:"addr"`
+	// AutoLogin determines whether automatic login should be enabled.
+	AutoLogin bool `yaml:"auto_login"`
 	// Token is the authentication token that Spectrum uses to authenticate with servers.
 	// When making requests to servers, Spectrum sends this token to the server for validation.
 	Token string `yaml:"token"`
@@ -11,9 +14,11 @@ type Opts struct {
 	LatencyInterval int64 `yaml:"latency_interval"`
 }
 
+// DefaultOpts returns the default configuration options for Spectrum.
 func DefaultOpts() *Opts {
 	return &Opts{
 		Addr:            ":19132",
+		AutoLogin:       true,
 		LatencyInterval: 3000,
 	}
 }

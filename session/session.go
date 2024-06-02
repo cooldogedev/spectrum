@@ -26,7 +26,8 @@ type Session struct {
 	logger   internal.Logger
 	registry *Registry
 
-	opts      *util.Opts
+	discovery server.Discovery
+	opts      util.Opts
 	transport transport.Transport
 
 	animation animation.Animation
@@ -38,68 +39,66 @@ type Session struct {
 	transferring atomic.Bool
 }
 
-func NewSession(clientConn *minecraft.Conn, logger internal.Logger, discovery server.Discovery, opts *util.Opts, registry *Registry, transport transport.Transport) (s *Session, err error) {
-	s = &Session{
+func NewSession(clientConn *minecraft.Conn, logger internal.Logger, registry *Registry, discovery server.Discovery, opts util.Opts, transport transport.Transport) *Session {
+	s := &Session{
 		clientConn: clientConn,
-
-		opts:      opts,
-		transport: transport,
 
 		logger:   logger,
 		registry: registry,
+
+		discovery: discovery,
+		opts:      opts,
+		transport: transport,
 
 		animation: &animation.Dimension{},
 		tracker:   NewTracker(),
 		latency:   0,
 	}
-
 	s.serverMu.Lock()
-	go func() {
-		defer s.serverMu.Unlock()
+	return s
+}
 
-		serverAddr, err := discovery.Discover(clientConn)
-		if err != nil {
-			s.Disconnect(err.Error())
-			s.logger.Debugf("Failed to discover a server: %v", err)
-			return
-		}
+func (s *Session) Login() (err error) {
+	defer s.serverMu.Unlock()
 
-		serverConn, err := s.dial(serverAddr)
-		if err != nil {
-			s.Close()
-			s.logger.Errorf("Failed to dial server: %v", err)
-			return
-		}
+	serverAddr, err := s.discovery.Discover(s.clientConn)
+	if err != nil {
+		s.logger.Debugf("Failed to discover a server: %v", err)
+		return err
+	}
 
-		s.serverAddr = serverAddr
-		s.serverConn = serverConn
-		if err := serverConn.Connect(clientConn, opts.Token); err != nil {
-			s.Close()
-			s.logger.Errorf("Failed to start connection sequence: %v", err)
-			return
-		}
+	serverConn, err := s.dial(serverAddr)
+	if err != nil {
+		s.logger.Errorf("Failed to dial server: %v", err)
+		return err
+	}
 
-		if err := serverConn.Spawn(); err != nil {
-			s.Close()
-			s.logger.Errorf("Failed to start spawn sequence: %v", err)
-			return
-		}
+	s.serverAddr = serverAddr
+	s.serverConn = serverConn
+	if err := serverConn.Connect(s.clientConn, s.opts.Token); err != nil {
+		s.logger.Errorf("Failed to start connection sequence: %v", err)
+		return err
+	}
 
-		if err := clientConn.StartGame(serverConn.GameData()); err != nil {
-			s.Close()
-			s.logger.Errorf("Failed to start game timeout: %v", err)
-			return
-		}
+	if err := serverConn.Spawn(); err != nil {
+		s.logger.Errorf("Failed to start spawn sequence: %v", err)
+		return err
+	}
 
-		s.sendMetadata(true)
+	if err := s.clientConn.StartGame(serverConn.GameData()); err != nil {
+		s.logger.Errorf("Failed to start game timeout: %v", err)
+		return err
+	}
 
-		go handleIncoming(s)
-		go handleOutgoing(s)
-		go handleLatency(s, opts.LatencyInterval)
+	s.sendMetadata(true)
 
-		s.registry.AddSession(clientConn.IdentityData().XUID, s)
-		s.logger.Infof("Successfully started session for %s", clientConn.IdentityData().DisplayName)
-	}()
+	go handleIncoming(s)
+	go handleOutgoing(s)
+	go handleLatency(s, s.opts.LatencyInterval)
+
+	identityData := s.clientConn.IdentityData()
+	s.registry.AddSession(identityData.XUID, s)
+	s.logger.Infof("Successfully logged in %s", identityData.DisplayName)
 	return
 }
 
@@ -218,11 +217,11 @@ func (s *Session) SetAnimation(animation animation.Animation) {
 	s.animation = animation
 }
 
-func (s *Session) Opts() *util.Opts {
+func (s *Session) Opts() util.Opts {
 	return s.opts
 }
 
-func (s *Session) SetOpts(opts *util.Opts) {
+func (s *Session) SetOpts(opts util.Opts) {
 	s.opts = opts
 }
 

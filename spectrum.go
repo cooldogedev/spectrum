@@ -17,7 +17,7 @@ type Spectrum struct {
 	registry *session.Registry
 
 	logger internal.Logger
-	opts   *util.Opts
+	opts   util.Opts
 }
 
 func NewSpectrum(discovery server.Discovery, logger internal.Logger, opts *util.Opts, transport tr.Transport) *Spectrum {
@@ -35,7 +35,7 @@ func NewSpectrum(discovery server.Discovery, logger internal.Logger, opts *util.
 		registry: session.NewRegistry(),
 
 		logger: logger,
-		opts:   opts,
+		opts:   *opts,
 	}
 }
 
@@ -52,19 +52,22 @@ func (s *Spectrum) Listen(config minecraft.ListenConfig) (err error) {
 }
 
 func (s *Spectrum) Accept() (*session.Session, error) {
-	conn, err := s.listener.Accept()
+	c, err := s.listener.Accept()
 	if err != nil {
 		s.logger.Errorf("Failed to accept session: %v", err)
 		return nil, err
 	}
 
-	newSession, err := session.NewSession(conn.(*minecraft.Conn), s.logger, s.discovery, s.opts, s.registry, s.transport)
-	if err != nil {
-		s.logger.Errorf("Failed to create session: %v", err)
-		return nil, err
+	conn := c.(*minecraft.Conn)
+	newSession := session.NewSession(conn, s.logger, s.registry, s.discovery, s.opts, s.transport)
+	if s.opts.AutoLogin {
+		go func() {
+			if err := newSession.Login(); err != nil {
+				newSession.Disconnect(err.Error())
+			}
+		}()
 	}
-
-	s.logger.Debugf("Accepted session from %v", conn.RemoteAddr())
+	s.logger.Debugf("Accepted session %s from %v", conn.IdentityData().DisplayName, conn.RemoteAddr())
 	return newSession, nil
 }
 
@@ -72,7 +75,7 @@ func (s *Spectrum) Discovery() server.Discovery {
 	return s.discovery
 }
 
-func (s *Spectrum) Opts() *util.Opts {
+func (s *Spectrum) Opts() util.Opts {
 	return s.opts
 }
 
