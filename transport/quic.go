@@ -17,12 +17,14 @@ type QUIC struct {
 	connections map[string]quic.Connection
 	logger      internal.Logger
 	mu          sync.RWMutex
+	timeout     time.Duration
 }
 
-func NewQUIC(logger internal.Logger) *QUIC {
+func NewQUIC(logger internal.Logger, timeout time.Duration) *QUIC {
 	return &QUIC{
 		connections: map[string]quic.Connection{},
 		logger:      logger,
+		timeout:     timeout,
 	}
 }
 
@@ -55,7 +57,7 @@ func (q *QUIC) openConnection(addr string) (quic.Connection, error) {
 			NextProtos:         []string{"spectrum"},
 		},
 		&quic.Config{
-			MaxIdleTimeout:                 time.Second * 2,
+			MaxIdleTimeout:                 q.timeout,
 			InitialStreamReceiveWindow:     1024 * 1024 * 10,
 			MaxStreamReceiveWindow:         1024 * 1024 * 10,
 			InitialConnectionReceiveWindow: 1024 * 1024 * 10,
