@@ -204,7 +204,7 @@ func (c *Conn) GameData() minecraft.GameData {
 func (c *Conn) Close() (err error) {
 	select {
 	case <-c.closed:
-		return errors.New("connection already closed")
+		return errors.New("already closed")
 	default:
 		close(c.closed)
 		_ = c.WritePacket(&packet.Disconnect{})

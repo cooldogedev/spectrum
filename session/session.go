@@ -34,8 +34,8 @@ type Session struct {
 	processor Processor
 	tracker   *Tracker
 
+	closed       chan struct{}
 	latency      int64
-	once         sync.Once
 	transferring atomic.Bool
 }
 
@@ -52,7 +52,9 @@ func NewSession(clientConn *minecraft.Conn, logger internal.Logger, registry *Re
 
 		animation: &animation.Dimension{},
 		tracker:   NewTracker(),
-		latency:   0,
+
+		closed:  make(chan struct{}),
+		latency: 0,
 	}
 	s.serverMu.Lock()
 	return s
@@ -248,27 +250,36 @@ func (s *Session) Server() *server.Conn {
 }
 
 func (s *Session) Disconnect(message string) {
-	_ = s.clientConn.WritePacket(&packet.Disconnect{
-		Message: message,
-	})
-	s.Close()
+	_ = s.clientConn.WritePacket(&packet.Disconnect{Message: message})
+	_ = s.Close()
 }
 
-func (s *Session) Close() {
-	s.once.Do(func() {
-		identity := s.clientConn.IdentityData()
-		_ = s.clientConn.Close()
+func (s *Session) Close() (err error) {
+	select {
+	case <-s.closed:
+		return errors.New("already closed")
+	default:
+		close(s.closed)
 
-		if s.serverConn != nil {
-			_ = s.serverConn.Close()
-		}
+		s.serverMu.Lock()
+		defer s.serverMu.Unlock()
 
-		s.registry.RemoveSession(identity.XUID)
 		if s.processor != nil {
 			s.processor.ProcessDisconnection()
+			s.processor = nil
 		}
+
+		_ = s.clientConn.Close()
+		if s.serverConn != nil {
+			_ = s.serverConn.Close()
+			s.serverConn = nil
+		}
+
+		identity := s.clientConn.IdentityData()
+		s.registry.RemoveSession(identity.XUID)
 		s.logger.Infof("Closed session for %s", identity.DisplayName)
-	})
+		return
+	}
 }
 
 func (s *Session) dial(addr string) (*server.Conn, error) {
