@@ -261,9 +261,6 @@ func (s *Session) Close() (err error) {
 	default:
 		close(s.closed)
 
-		s.serverMu.Lock()
-		defer s.serverMu.Unlock()
-
 		if s.processor != nil {
 			s.processor.ProcessDisconnection()
 			s.processor = nil
