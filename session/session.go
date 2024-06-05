@@ -65,31 +65,26 @@ func (s *Session) Login() (err error) {
 
 	serverAddr, err := s.discovery.Discover(s.clientConn)
 	if err != nil {
-		s.logger.Debugf("Failed to discover a server: %v", err)
-		return err
+		return fmt.Errorf("discovery failed: %v", err)
 	}
 
 	serverConn, err := s.dial(serverAddr)
 	if err != nil {
-		s.logger.Errorf("Failed to dial server: %v", err)
-		return err
+		return fmt.Errorf("dialer failed: %v", err)
 	}
 
 	s.serverAddr = serverAddr
 	s.serverConn = serverConn
 	if err := serverConn.Connect(s.clientConn, s.opts.Token); err != nil {
-		s.logger.Errorf("Failed to start connection sequence: %v", err)
-		return err
+		return fmt.Errorf("connection sequence failed: %v", err)
 	}
 
 	if err := serverConn.Spawn(); err != nil {
-		s.logger.Errorf("Failed to start spawn sequence: %v", err)
-		return err
+		return fmt.Errorf("spawn sequence failed: %v", err)
 	}
 
 	if err := s.clientConn.StartGame(serverConn.GameData()); err != nil {
-		s.logger.Errorf("Failed to start game timeout: %v", err)
-		return err
+		return fmt.Errorf("startgame sequence failed: %v", err)
 	}
 
 	s.sendMetadata(true)
@@ -128,7 +123,7 @@ func (s *Session) Transfer(addr string) error {
 		if conn != nil {
 			_ = conn.Close()
 		}
-		return fmt.Errorf("failed to dial server: %v", err)
+		return fmt.Errorf("dialer failed: %v", err)
 	}
 
 	s.sendMetadata(true)
@@ -137,7 +132,7 @@ func (s *Session) Transfer(addr string) error {
 			_ = conn.Close()
 		}
 		s.sendMetadata(false)
-		return fmt.Errorf("failed to start connection sequence: %v", err)
+		return fmt.Errorf("connection sequence failed: %v", err)
 	}
 
 	if err := conn.Spawn(); err != nil {
@@ -145,7 +140,7 @@ func (s *Session) Transfer(addr string) error {
 			_ = conn.Close()
 		}
 		s.sendMetadata(false)
-		return fmt.Errorf("failed to start spawn sequence: %v", err)
+		return fmt.Errorf("spawn sequence failed: %v", err)
 	}
 
 	serverGameData := conn.GameData()
@@ -269,7 +264,6 @@ func (s *Session) Close() (err error) {
 		_ = s.clientConn.Close()
 		if s.serverConn != nil {
 			_ = s.serverConn.Close()
-			s.serverConn = nil
 		}
 
 		identity := s.clientConn.IdentityData()
