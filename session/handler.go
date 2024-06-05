@@ -46,7 +46,9 @@ func handleIncoming(s *Session) {
 
 				s.tracker.handlePacket(pk)
 				if err := s.clientConn.WritePacket(pk); err != nil {
-					s.logger.Errorf("Failed to write packet to client: %v", err)
+					if !strings.Contains(err.Error(), "closed network connection") {
+						s.logger.Errorf("Failed to write packet to client: %v", err)
+					}
 					return
 				}
 			case []byte:
