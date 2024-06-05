@@ -12,7 +12,7 @@ func handleIncoming(s *Session) {
 	defer s.Close()
 	for {
 		select {
-		case <-s.closed:
+		case <-s.ch:
 			return
 		default:
 			if s.transferring.Load() {
@@ -26,13 +26,15 @@ func handleIncoming(s *Session) {
 					continue
 				}
 
-				s.logger.Errorf("Failed to read packet from server: %v", err)
+				if !s.closed.Load() {
+					s.logger.Errorf("Failed to read packet from server: %v", err)
+				}
 				return
 			}
 
 			switch pk := pk.(type) {
 			case *packet.Latency:
-				s.latency = pk.Latency
+				s.serverLatency = pk.Latency
 			case *packet.Transfer:
 				if err := s.Transfer(pk.Addr); err != nil {
 					s.logger.Errorf("Failed to transfer: %v", err)
@@ -61,7 +63,7 @@ func handleOutgoing(s *Session) {
 	defer s.Close()
 	for {
 		select {
-		case <-s.closed:
+		case <-s.ch:
 			return
 		default:
 			if s.transferring.Load() {
@@ -94,10 +96,13 @@ func handleOutgoing(s *Session) {
 
 func handleLatency(s *Session, interval int64) {
 	ticker := time.NewTicker(time.Millisecond * time.Duration(interval))
-	defer ticker.Stop()
+	defer func() {
+		_ = s.Close()
+		ticker.Stop()
+	}()
 	for {
 		select {
-		case <-s.closed:
+		case <-s.ch:
 			return
 		case <-ticker.C:
 			if s.transferring.Load() {
@@ -105,7 +110,9 @@ func handleLatency(s *Session, interval int64) {
 			}
 
 			if err := s.Server().WritePacket(&packet.Latency{Latency: s.clientConn.Latency().Milliseconds(), Timestamp: time.Now().UnixMilli()}); err != nil {
-				s.logger.Errorf("Failed to send latency packet: %v", err)
+				if !s.closed.Load() {
+					s.logger.Errorf("Failed to send latency packet: %v", err)
+				}
 				return
 			}
 		}

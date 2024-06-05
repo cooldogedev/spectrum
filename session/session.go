@@ -19,9 +19,10 @@ import (
 type Session struct {
 	clientConn *minecraft.Conn
 
-	serverAddr string
-	serverConn *server.Conn
-	serverMu   sync.RWMutex
+	serverAddr    string
+	serverConn    *server.Conn
+	serverLatency int64
+	serverMu      sync.RWMutex
 
 	logger   internal.Logger
 	registry *Registry
@@ -34,9 +35,10 @@ type Session struct {
 	processor Processor
 	tracker   *Tracker
 
-	closed       chan struct{}
-	latency      int64
 	transferring atomic.Bool
+
+	closed atomic.Bool
+	ch     chan struct{}
 }
 
 func NewSession(clientConn *minecraft.Conn, logger internal.Logger, registry *Registry, discovery server.Discovery, opts util.Opts, transport transport.Transport) *Session {
@@ -53,8 +55,7 @@ func NewSession(clientConn *minecraft.Conn, logger internal.Logger, registry *Re
 		animation: &animation.Dimension{},
 		tracker:   NewTracker(),
 
-		closed:  make(chan struct{}),
-		latency: 0,
+		ch: make(chan struct{}),
 	}
 	s.serverMu.Lock()
 	return s
@@ -231,7 +232,7 @@ func (s *Session) SetProcessor(processor Processor) {
 }
 
 func (s *Session) Latency() int64 {
-	return s.clientConn.Latency().Milliseconds() + s.latency
+	return s.clientConn.Latency().Milliseconds() + s.serverLatency
 }
 
 func (s *Session) Client() *minecraft.Conn {
@@ -251,10 +252,11 @@ func (s *Session) Disconnect(message string) {
 
 func (s *Session) Close() (err error) {
 	select {
-	case <-s.closed:
+	case <-s.ch:
 		return errors.New("already closed")
 	default:
-		close(s.closed)
+		close(s.ch)
+		s.closed.Store(true)
 
 		if s.processor != nil {
 			s.processor.ProcessDisconnection()
