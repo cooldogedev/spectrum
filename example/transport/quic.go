@@ -1,8 +1,6 @@
 package main
 
 import (
-	"time"
-
 	"github.com/cooldogedev/spectrum"
 	"github.com/cooldogedev/spectrum/server"
 	"github.com/cooldogedev/spectrum/transport"
@@ -13,7 +11,7 @@ import (
 
 func main() {
 	logger := logrus.New()
-	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery("127.0.0.1:19133"), logger, nil, transport.NewQUIC(logger, time.Second*5))
+	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery("127.0.0.1:19133"), logger, nil, transport.NewQUIC(logger))
 	if err := proxy.Listen(minecraft.ListenConfig{StatusProvider: util.NewStatusProvider("Spectrum Proxy")}); err != nil {
 		logger.Errorf("Failed to listen on proxy: %v", err)
 		return
