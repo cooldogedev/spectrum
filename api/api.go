@@ -34,7 +34,7 @@ func NewAPI(registry *session.Registry, logger internal.Logger, authentication A
 	a.RegisterHandler(packet.IDKick, func(pk packet.Packet) bool {
 		username := pk.(*packet.Kick).Username
 		reason := pk.(*packet.Kick).Username
-		if s := a.registry.GetSessionByUsername(username); s == nil {
+		if s := a.registry.GetSessionByUsername(username); s != nil {
 			s.Disconnect(reason)
 		} else {
 			a.logger.Debugf("Tried to disconnect an unknown player %s for %s", username, reason)
@@ -44,7 +44,7 @@ func NewAPI(registry *session.Registry, logger internal.Logger, authentication A
 	a.RegisterHandler(packet.IDTransfer, func(pk packet.Packet) bool {
 		username := pk.(*packet.Transfer).Username
 		addr := pk.(*packet.Transfer).Addr
-		if s := a.registry.GetSessionByUsername(username); s == nil {
+		if s := a.registry.GetSessionByUsername(username); s != nil {
 			if err := s.Transfer(addr); err != nil {
 				a.logger.Errorf("Failed to transfer player %s to %s: %v", username, addr, err)
 			}
