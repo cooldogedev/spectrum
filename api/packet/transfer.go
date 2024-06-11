@@ -14,12 +14,12 @@ func (pk *Transfer) ID() uint32 {
 
 // Encode ...
 func (pk *Transfer) Encode(buf *bytes.Buffer) {
-	writeString(buf, pk.Addr)
-	writeString(buf, pk.Username)
+	WriteString(buf, pk.Addr)
+	WriteString(buf, pk.Username)
 }
 
 // Decode ...
 func (pk *Transfer) Decode(buf *bytes.Buffer) {
-	pk.Addr = readString(buf)
-	pk.Username = readString(buf)
+	pk.Addr = ReadString(buf)
+	pk.Username = ReadString(buf)
 }

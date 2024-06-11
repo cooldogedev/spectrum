@@ -14,12 +14,12 @@ func (pk *Kick) ID() uint32 {
 
 // Encode ...
 func (pk *Kick) Encode(buf *bytes.Buffer) {
-	writeString(buf, pk.Reason)
-	writeString(buf, pk.Username)
+	WriteString(buf, pk.Reason)
+	WriteString(buf, pk.Username)
 }
 
 // Decode ...
 func (pk *Kick) Decode(buf *bytes.Buffer) {
-	pk.Reason = readString(buf)
-	pk.Username = readString(buf)
+	pk.Reason = ReadString(buf)
+	pk.Username = ReadString(buf)
 }
