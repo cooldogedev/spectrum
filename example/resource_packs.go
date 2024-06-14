@@ -24,10 +24,10 @@ func main() {
 
 	listenConfig := minecraft.ListenConfig{
 		ResourcePacks:        packs,
-		StatusProvider:       util.NewStatusProvider("Spectrum Proxy"),
+		StatusProvider:       util.NewStatusProvider("Spectrum Proxy", "Spectrum"),
 		TexturePacksRequired: true,
 	}
-	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery(":19133"), logger, nil, nil)
+	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery("127.0.0.1:19133"), logger, nil, nil)
 	if err := proxy.Listen(listenConfig); err != nil {
 		logger.Errorf("Failed to listen on proxy: %v", err)
 		return

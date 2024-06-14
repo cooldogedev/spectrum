@@ -32,8 +32,8 @@ func (p *easeProcessor) ProcessClient(pk packet.Packet) bool {
 
 func main() {
 	logger := logrus.New()
-	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery(":19133"), logger, nil, nil)
-	if err := proxy.Listen(minecraft.ListenConfig{StatusProvider: util.NewStatusProvider("Spectrum Proxy")}); err != nil {
+	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery("127.0.0.1:19133"), logger, nil, nil)
+	if err := proxy.Listen(minecraft.ListenConfig{StatusProvider: util.NewStatusProvider("Spectrum Proxy", "Spectrum")}); err != nil {
 		logger.Errorf("Failed to listen on proxy: %v", err)
 		return
 	}

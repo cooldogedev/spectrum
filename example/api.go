@@ -11,15 +11,15 @@ import (
 
 func main() {
 	logger := logrus.New()
-	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery(":19133"), logger, nil, nil)
-	if err := proxy.Listen(minecraft.ListenConfig{StatusProvider: util.NewStatusProvider("Spectrum Proxy")}); err != nil {
+	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery("127.0.0.1:19133"), logger, nil, nil)
+	if err := proxy.Listen(minecraft.ListenConfig{StatusProvider: util.NewStatusProvider("Spectrum Proxy", "Spectrum")}); err != nil {
 		logger.Errorf("Failed to listen on proxy: %v", err)
 		return
 	}
 
 	go func() {
 		a := api.NewAPI(proxy.Registry(), logger, nil)
-		if err := a.Listen(":19132"); err != nil {
+		if err := a.Listen("127.0.0.1:19132"); err != nil {
 			logger.Errorf("Failed to listen on a: %v", err)
 			return
 		}

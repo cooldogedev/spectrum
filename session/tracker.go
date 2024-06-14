@@ -66,7 +66,7 @@ func (t *Tracker) clearBossBars(s *Session) {
 	t.bossBars.Each(func(i int64) bool {
 		_ = s.clientConn.WritePacket(&packet.BossEvent{
 			BossEntityUniqueID: i,
-			EventType: packet.BossEventHide,
+			EventType:          packet.BossEventHide,
 		})
 		return true
 	})
@@ -118,6 +118,5 @@ func (t *Tracker) clearScoreboards(s *Session) {
 		})
 		return true
 	})
-
 	t.scoreboards.Clear()
 }

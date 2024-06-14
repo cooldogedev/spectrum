@@ -63,7 +63,7 @@ func (q *QUIC) openConnection(addr string) (quic.Connection, error) {
 			AllowConnectionWindowIncrease:  func(conn quic.Connection, delta uint64) bool { return false },
 			InitialPacketSize:              1350,
 			DisablePathMTUDiscovery:        false,
-			Tracer:                         qlog.DefaultTracer,
+			Tracer:                         qlog.DefaultConnectionTracer,
 		},
 	)
 	if err != nil {

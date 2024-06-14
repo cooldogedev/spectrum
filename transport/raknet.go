@@ -12,7 +12,7 @@ func NewRakNet() *RakNet {
 	return &RakNet{}
 }
 
-func (t *RakNet) Dial(addr string) (io.ReadWriteCloser, error) {
+func (r *RakNet) Dial(addr string) (io.ReadWriteCloser, error) {
 	conn, err := minecraft.Dial("raknet", addr)
 	if err != nil {
 		return nil, err

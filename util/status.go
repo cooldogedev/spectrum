@@ -3,17 +3,19 @@ package util
 import "github.com/sandertv/gophertunnel/minecraft"
 
 type StatusProvider struct {
-	message string
+	serverName    string
+	serverSubName string
 }
 
-func NewStatusProvider(message string) *StatusProvider {
-	return &StatusProvider{message: message}
+func NewStatusProvider(serverName string, serverSubName string) *StatusProvider {
+	return &StatusProvider{serverName: serverName, serverSubName: serverSubName}
 }
 
 func (s *StatusProvider) ServerStatus(playerCount int, maxPlayers int) minecraft.ServerStatus {
 	return minecraft.ServerStatus{
-		ServerName:  s.message,
-		PlayerCount: playerCount,
-		MaxPlayers:  maxPlayers,
+		ServerName:    s.serverName,
+		ServerSubName: s.serverSubName,
+		PlayerCount:   playerCount,
+		MaxPlayers:    maxPlayers,
 	}
 }
