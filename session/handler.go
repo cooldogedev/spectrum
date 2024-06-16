@@ -27,7 +27,7 @@ func handleIncoming(s *Session) {
 				}
 
 				if !s.closed.Load() {
-					s.logger.Errorf("Failed to read packet from server: %v", err)
+					s.logger.Error("failed to read packet from server", "err", err)
 				}
 				return
 			}
@@ -37,7 +37,7 @@ func handleIncoming(s *Session) {
 				s.serverLatency = pk.Latency
 			case *packet.Transfer:
 				if err := s.Transfer(pk.Addr); err != nil {
-					s.logger.Errorf("Failed to transfer: %v", err)
+					s.logger.Error("failed to transfer", "err", err)
 				}
 			case packet2.Packet:
 				if s.processor != nil && !s.processor.ProcessServer(pk) {
@@ -47,13 +47,13 @@ func handleIncoming(s *Session) {
 				s.tracker.handlePacket(pk)
 				if err := s.clientConn.WritePacket(pk); err != nil {
 					if !strings.Contains(err.Error(), "closed network connection") {
-						s.logger.Errorf("Failed to write packet to client: %v", err)
+						s.logger.Error("failed to write packet to client", "err", err)
 					}
 					return
 				}
 			case []byte:
 				if _, err := s.clientConn.Write(pk); err != nil {
-					s.logger.Errorf("Failed to write raw packet to client: %v", err)
+					s.logger.Error("failed to write raw packet to client", "err", err)
 					return
 				}
 			}
@@ -75,13 +75,9 @@ func handleOutgoing(s *Session) {
 			pk, err := s.clientConn.ReadPacket()
 			if err != nil {
 				if !strings.Contains(err.Error(), "closed network connection") {
-					s.logger.Errorf("Failed to read packet from client: %v", err)
+					s.logger.Error("failed to read packet from client", "err", err)
 				}
 				return
-			}
-
-			if violation, ok := pk.(*packet2.PacketViolationWarning); ok {
-				s.logger.Errorf("Received packet violation warning: PacketID=%v, Context=%v, Severity=%v, Type=%v", violation.PacketID, violation.ViolationContext, violation.Severity, violation.Type)
 			}
 
 			if s.processor != nil && !s.processor.ProcessClient(pk) {
@@ -89,7 +85,7 @@ func handleOutgoing(s *Session) {
 			}
 
 			if err := s.Server().WritePacket(pk); err != nil {
-				s.logger.Errorf("Failed to write packet to server: %v", err)
+				s.logger.Error("failed to write packet to server", "err", err)
 				return
 			}
 		}
@@ -113,7 +109,7 @@ func handleLatency(s *Session, interval int64) {
 
 			if err := s.Server().WritePacket(&packet.Latency{Latency: s.clientConn.Latency().Milliseconds(), Timestamp: time.Now().UnixMilli()}); err != nil {
 				if !s.closed.Load() {
-					s.logger.Errorf("Failed to send latency packet: %v", err)
+					s.logger.Error("failed to send latency packet", "err", err)
 				}
 				return
 			}

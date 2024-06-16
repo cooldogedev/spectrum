@@ -3,10 +3,10 @@ package session
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 
-	"github.com/cooldogedev/spectrum/internal"
 	"github.com/cooldogedev/spectrum/server"
 	"github.com/cooldogedev/spectrum/session/animation"
 	"github.com/cooldogedev/spectrum/transport"
@@ -24,7 +24,7 @@ type Session struct {
 	serverLatency int64
 	serverMu      sync.RWMutex
 
-	logger   internal.Logger
+	logger   *slog.Logger
 	registry *Registry
 
 	discovery server.Discovery
@@ -37,11 +37,12 @@ type Session struct {
 
 	transferring atomic.Bool
 
-	closed atomic.Bool
-	ch     chan struct{}
+	loggedIn atomic.Bool
+	closed   atomic.Bool
+	ch       chan struct{}
 }
 
-func NewSession(clientConn *minecraft.Conn, logger internal.Logger, registry *Registry, discovery server.Discovery, opts util.Opts, transport transport.Transport) *Session {
+func NewSession(clientConn *minecraft.Conn, logger *slog.Logger, registry *Registry, discovery server.Discovery, opts util.Opts, transport transport.Transport) *Session {
 	s := &Session{
 		clientConn: clientConn,
 
@@ -95,8 +96,9 @@ func (s *Session) Login() (err error) {
 	go handleLatency(s, s.opts.LatencyInterval)
 
 	identityData := s.clientConn.IdentityData()
+	s.loggedIn.Store(true)
 	s.registry.AddSession(identityData.XUID, s)
-	s.logger.Infof("Successfully logged in %s", identityData.DisplayName)
+	s.logger.Info("logged in session", "username", identityData.DisplayName)
 	return
 }
 
@@ -203,7 +205,7 @@ func (s *Session) Transfer(addr string) error {
 	if s.processor != nil {
 		s.processor.ProcessPostTransfer(addr)
 	}
-	s.logger.Debugf("Transferred session for %s to %s", s.clientConn.IdentityData().DisplayName, addr)
+	s.logger.Debug("transferred session", "username", s.clientConn.IdentityData().DisplayName, "addr", addr)
 	return nil
 }
 
@@ -270,7 +272,11 @@ func (s *Session) Close() (err error) {
 
 		identity := s.clientConn.IdentityData()
 		s.registry.RemoveSession(identity.XUID)
-		s.logger.Infof("Closed session for %s", identity.DisplayName)
+		if s.loggedIn.Load() {
+			s.logger.Info("closed session", "username", identity.DisplayName)
+		} else {
+			s.logger.Debug("closed unlogged session", "username", identity.DisplayName)
+		}
 		return
 	}
 }

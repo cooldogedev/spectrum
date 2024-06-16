@@ -5,21 +5,21 @@ import (
 	"crypto/tls"
 	"errors"
 	"io"
+	"log/slog"
 	"sync"
 	"time"
 
-	"github.com/cooldogedev/spectrum/internal"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/qlog"
 )
 
 type QUIC struct {
 	connections map[string]quic.Connection
-	logger      internal.Logger
+	logger      *slog.Logger
 	mu          sync.RWMutex
 }
 
-func NewQUIC(logger internal.Logger) *QUIC {
+func NewQUIC(logger *slog.Logger) *QUIC {
 	return &QUIC{
 		connections: map[string]quic.Connection{},
 		logger:      logger,
@@ -76,9 +76,9 @@ func (q *QUIC) openConnection(addr string) (quic.Connection, error) {
 		ctx := conn.Context()
 		<-ctx.Done()
 		if err := ctx.Err(); err != nil && !errors.Is(context.Canceled, err) {
-			q.logger.Errorf("Closed connection to %s: %v", addr, err)
+			q.logger.Error("closed connection", "addr", addr, "err", err)
 		} else {
-			q.logger.Debugf("Closed connection to %s", addr)
+			q.logger.Debug("closed connection", "addr", addr)
 		}
 	}()
 	q.add(addr, conn)

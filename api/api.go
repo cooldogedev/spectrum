@@ -3,10 +3,10 @@ package api
 import (
 	"errors"
 	"io"
+	"log/slog"
 	"net"
 
 	"github.com/cooldogedev/spectrum/api/packet"
-	"github.com/cooldogedev/spectrum/internal"
 	"github.com/cooldogedev/spectrum/session"
 )
 
@@ -19,10 +19,10 @@ type API struct {
 
 	closed   chan struct{}
 	listener net.Listener
-	logger   internal.Logger
+	logger   *slog.Logger
 }
 
-func NewAPI(registry *session.Registry, logger internal.Logger, authentication Authentication) *API {
+func NewAPI(registry *session.Registry, logger *slog.Logger, authentication Authentication) *API {
 	a := &API{
 		authentication: authentication,
 		handlers:       map[uint32]handler{},
@@ -37,7 +37,7 @@ func NewAPI(registry *session.Registry, logger internal.Logger, authentication A
 		if s := a.registry.GetSessionByUsername(username); s != nil {
 			s.Disconnect(reason)
 		} else {
-			a.logger.Debugf("Tried to disconnect an unknown player %s for %s", username, reason)
+			a.logger.Debug("tried to disconnect an unknown player", "username", username, "reason", reason)
 		}
 		return true
 	})
@@ -46,10 +46,10 @@ func NewAPI(registry *session.Registry, logger internal.Logger, authentication A
 		addr := pk.(*packet.Transfer).Addr
 		if s := a.registry.GetSessionByUsername(username); s != nil {
 			if err := s.Transfer(addr); err != nil {
-				a.logger.Errorf("Failed to transfer player %s to %s: %v", username, addr, err)
+				a.logger.Error("failed to transfer player", "username", username, "addr", addr, "err", err)
 			}
 		} else {
-			a.logger.Debugf("Tried to transfer an unknown player %s to %s", username, addr)
+			a.logger.Debug("tried to transfer an unknown player", "username", username, "addr", addr)
 		}
 		return true
 	})
@@ -59,15 +59,18 @@ func NewAPI(registry *session.Registry, logger internal.Logger, authentication A
 func (a *API) Listen(addr string) (err error) {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
+		a.logger.Error("failed to start listening", "addr", addr, "err", err)
 		return err
 	}
 	a.listener = listener
+	a.logger.Info("started listening on", "addr", addr)
 	return
 }
 
 func (a *API) Accept() (err error) {
 	conn, err := a.listener.Accept()
 	if err != nil {
+		a.logger.Error("sailed to accept connection", "err", err)
 		return err
 	}
 
@@ -100,40 +103,40 @@ func (a *API) Close() (err error) {
 
 func (a *API) handle(conn net.Conn) {
 	identifier := conn.RemoteAddr().String()
-	a.logger.Debugf("Accepted connection from %s", identifier)
+	a.logger.Debug("accepted connection", "addr", identifier)
 
 	c := NewClient(conn, packet.NewPool())
 	defer func() {
 		_ = c.Close()
-		a.logger.Infof("Disconnected connection from %s", identifier)
+		a.logger.Info("disconnected connection", "addr", identifier)
 	}()
 
 	connectionRequestPacket, err := c.ReadPacket()
 	if err != nil {
 		_ = c.WritePacket(&packet.ConnectionResponse{Response: packet.ResponseFail})
-		a.logger.Errorf("Failed to read connection request: %v", err)
+		a.logger.Error("failed to read connection request", "addr", identifier, "err", err)
 		return
 	}
 
 	connectionRequest, ok := connectionRequestPacket.(*packet.ConnectionRequest)
 	if !ok {
 		_ = c.WritePacket(&packet.ConnectionResponse{Response: packet.ResponseFail})
-		a.logger.Errorf("Expected connection request, got: %d", connectionRequest.ID())
+		a.logger.Error("expected connection request", "addr", identifier, "pid", connectionRequestPacket.ID())
 		return
 	}
 
 	if a.authentication != nil && !a.authentication.Authenticate(connectionRequest.Token) {
 		_ = c.WritePacket(&packet.ConnectionResponse{Response: packet.ResponseUnauthorized})
-		a.logger.Debugf("Closed unauthenticated connection from %s, token: %s", identifier, connectionRequest.Token)
+		a.logger.Error("unauthorized connection", "addr", identifier, "token", connectionRequest.Token)
 		return
 	}
 
 	if err := c.WritePacket(&packet.ConnectionResponse{Response: packet.ResponseSuccess}); err != nil {
-		a.logger.Errorf("Failed to write connection response: %v", err)
+		a.logger.Error("failed to write connection response", "err", err)
 		return
 	}
 
-	a.logger.Infof("Successfully authorized connection from %s", identifier)
+	a.logger.Info("successfully authorized connection", "addr", identifier)
 	for {
 		select {
 		case <-a.closed:
@@ -142,18 +145,18 @@ func (a *API) handle(conn net.Conn) {
 			pk, err := c.ReadPacket()
 			if err != nil {
 				if !errors.Is(err, io.EOF) {
-					a.logger.Errorf("Failed to read packet to %s: %v", identifier, err)
+					a.logger.Error("failed to read packet", "addr", identifier, "err", err)
 				}
 				return
 			}
 
 			if h, ok := a.handlers[pk.ID()]; ok {
 				if !h(pk) {
-					a.logger.Errorf("Failed to handle packet from %s: %d", identifier, pk.ID())
+					a.logger.Error("failed to handle packet", "addr", identifier, "pid", pk.ID())
 					return
 				}
 			} else {
-				a.logger.Errorf("Received an unhandled packet from %s: %d", identifier, pk.ID())
+				a.logger.Error("received an unhandled packet", "addr", identifier, "pid", pk.ID())
 			}
 		}
 	}

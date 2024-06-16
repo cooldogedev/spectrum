@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log/slog"
 	"os"
 	"path"
 
@@ -9,16 +10,15 @@ import (
 	"github.com/cooldogedev/spectrum/util"
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/resource"
-	"github.com/sirupsen/logrus"
 )
 
 var contentKeys = map[string]string{"uuid": "key"}
 
 func main() {
-	logger := logrus.New()
+	logger := slog.Default()
 	packs, err := parse(contentKeys)
 	if err != nil {
-		logger.Errorf("Failed to parse resource packs: %v", err)
+		logger.Error("failed to parse resource packs", "err", err)
 		return
 	}
 
@@ -29,14 +29,11 @@ func main() {
 	}
 	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery("127.0.0.1:19133"), logger, nil, nil)
 	if err := proxy.Listen(listenConfig); err != nil {
-		logger.Errorf("Failed to listen on proxy: %v", err)
 		return
 	}
 
 	for {
-		if _, err := proxy.Accept(); err != nil {
-			logger.Errorf("Failed to accept session: %v", err)
-		}
+		_, _ = proxy.Accept()
 	}
 }
 

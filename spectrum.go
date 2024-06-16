@@ -1,7 +1,8 @@
 package spectrum
 
 import (
-	"github.com/cooldogedev/spectrum/internal"
+	"log/slog"
+
 	"github.com/cooldogedev/spectrum/server"
 	"github.com/cooldogedev/spectrum/session"
 	tr "github.com/cooldogedev/spectrum/transport"
@@ -16,11 +17,11 @@ type Spectrum struct {
 	listener *minecraft.Listener
 	registry *session.Registry
 
-	logger internal.Logger
+	logger *slog.Logger
 	opts   util.Opts
 }
 
-func NewSpectrum(discovery server.Discovery, logger internal.Logger, opts *util.Opts, transport tr.Transport) *Spectrum {
+func NewSpectrum(discovery server.Discovery, logger *slog.Logger, opts *util.Opts, transport tr.Transport) *Spectrum {
 	if opts == nil {
 		opts = util.DefaultOpts()
 	}
@@ -42,19 +43,19 @@ func NewSpectrum(discovery server.Discovery, logger internal.Logger, opts *util.
 func (s *Spectrum) Listen(config minecraft.ListenConfig) (err error) {
 	listener, err := config.Listen("raknet", s.opts.Addr)
 	if err != nil {
-		s.logger.Errorf("Failed to start s: %v", err)
+		s.logger.Error("failed to listen", "err", err)
 		return err
 	}
 
 	s.listener = listener
-	s.logger.Infof("Started sprectrum on %v", listener.Addr())
+	s.logger.Info("started listening", "addr", listener.Addr())
 	return nil
 }
 
 func (s *Spectrum) Accept() (*session.Session, error) {
 	c, err := s.listener.Accept()
 	if err != nil {
-		s.logger.Errorf("Failed to accept session: %v", err)
+		s.logger.Error("failed to accept session", "err", err)
 		return nil, err
 	}
 
@@ -64,10 +65,11 @@ func (s *Spectrum) Accept() (*session.Session, error) {
 		go func() {
 			if err := newSession.Login(); err != nil {
 				newSession.Disconnect(err.Error())
+				s.logger.Error("failed to login session", "err", err)
 			}
 		}()
 	}
-	s.logger.Debugf("Accepted session %s from %v", conn.IdentityData().DisplayName, conn.RemoteAddr())
+	s.logger.Debug("accepted session", "username", conn.IdentityData().DisplayName, "addr", conn.RemoteAddr().String())
 	return newSession, nil
 }
 

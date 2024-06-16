@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"log/slog"
 
 	"github.com/cooldogedev/spectrum"
 	"github.com/cooldogedev/spectrum/server"
@@ -11,7 +12,6 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
-	"github.com/sirupsen/logrus"
 )
 
 type easeProcessor struct {
@@ -31,17 +31,15 @@ func (p *easeProcessor) ProcessClient(pk packet.Packet) bool {
 }
 
 func main() {
-	logger := logrus.New()
+	logger := slog.Default()
 	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery("127.0.0.1:19133"), logger, nil, nil)
 	if err := proxy.Listen(minecraft.ListenConfig{StatusProvider: util.NewStatusProvider("Spectrum Proxy", "Spectrum")}); err != nil {
-		logger.Errorf("Failed to listen on proxy: %v", err)
 		return
 	}
 
 	for {
 		s, err := proxy.Accept()
 		if err != nil {
-			logger.Errorf("Failed to accept session: %v", err)
 			continue
 		}
 

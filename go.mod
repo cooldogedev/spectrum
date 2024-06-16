@@ -5,9 +5,8 @@ go 1.22.1
 require (
 	github.com/go-gl/mathgl v1.1.0
 	github.com/quic-go/quic-go v0.45.0
-	github.com/sandertv/gophertunnel v1.37.1-0.20240614130903-fec8f3c1e361
+	github.com/sandertv/gophertunnel v1.38.0
 	github.com/scylladb/go-set v1.0.2
-	github.com/sirupsen/logrus v1.9.3
 )
 
 require (
