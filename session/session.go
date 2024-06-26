@@ -123,25 +123,18 @@ func (s *Session) Transfer(addr string) error {
 
 	conn, err := s.dial(addr)
 	if err != nil {
-		if conn != nil {
-			_ = conn.Close()
-		}
 		return fmt.Errorf("dialer failed: %v", err)
 	}
 
 	s.sendMetadata(true)
 	if err := conn.Connect(s.clientConn, s.opts.Token); err != nil {
-		if conn != nil {
-			_ = conn.Close()
-		}
+		_ = conn.Close()
 		s.sendMetadata(false)
 		return fmt.Errorf("connection sequence failed: %v", err)
 	}
 
 	if err := conn.Spawn(); err != nil {
-		if conn != nil {
-			_ = conn.Close()
-		}
+		_ = conn.Close()
 		s.sendMetadata(false)
 		return fmt.Errorf("spawn sequence failed: %v", err)
 	}
@@ -177,25 +170,14 @@ func (s *Session) Transfer(addr string) error {
 		Yaw:             serverGameData.Yaw,
 		Mode:            packet.MoveModeReset,
 	})
-
 	_ = s.clientConn.WritePacket(&packet.LevelEvent{
 		EventType: packet.LevelEventStopRaining,
 		EventData: 10_000,
 	})
-	_ = s.clientConn.WritePacket(&packet.LevelEvent{
-		EventType: packet.LevelEventStopThunderstorm,
-	})
-
-	_ = s.clientConn.WritePacket(&packet.SetDifficulty{
-		Difficulty: uint32(serverGameData.Difficulty),
-	})
-	_ = s.clientConn.WritePacket(&packet.SetPlayerGameType{
-		GameType: serverGameData.PlayerGameMode,
-	})
-
-	_ = s.clientConn.WritePacket(&packet.GameRulesChanged{
-		GameRules: serverGameData.GameRules,
-	})
+	_ = s.clientConn.WritePacket(&packet.LevelEvent{EventType: packet.LevelEventStopThunderstorm})
+	_ = s.clientConn.WritePacket(&packet.SetDifficulty{Difficulty: uint32(serverGameData.Difficulty)})
+	_ = s.clientConn.WritePacket(&packet.SetPlayerGameType{GameType: serverGameData.PlayerGameMode})
+	_ = s.clientConn.WritePacket(&packet.GameRulesChanged{GameRules: serverGameData.GameRules})
 
 	s.animation.Clear(s.clientConn, serverGameData)
 	_ = s.serverConn.Close()
