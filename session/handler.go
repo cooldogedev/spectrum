@@ -51,7 +51,9 @@ func handleIncoming(s *Session) {
 					s.logger.Error("failed to transfer", "err", err)
 				}
 			case packet2.Packet:
-				if s.processor != nil && !s.processor.ProcessServer(pk) {
+				ctx := NewContext()
+				s.processor.ProcessServer(ctx, pk)
+				if ctx.Cancelled() {
 					continue
 				}
 
@@ -91,7 +93,9 @@ func handleOutgoing(s *Session) {
 				return
 			}
 
-			if s.processor != nil && !s.processor.ProcessClient(pk) {
+			ctx := NewContext()
+			s.processor.ProcessClient(ctx, pk)
+			if ctx.Cancelled() {
 				continue
 			}
 

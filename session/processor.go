@@ -1,29 +1,55 @@
 package session
 
-import "github.com/sandertv/gophertunnel/minecraft/protocol/packet"
+import (
+	"github.com/sandertv/gophertunnel/minecraft"
+	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
+)
 
-// Processor is an interface defining methods for handling events such as packet sending/receiving, transfers and disconnection.
-type Processor interface {
-	// ProcessServer determines whether the provided packet, originating from the server, should be forwarded to the client.
-	// It returns true if the packet should be forwarded, otherwise false.
-	ProcessServer(packet packet.Packet) bool
-	// ProcessClient determines whether the provided packet, originating from the client, should be forwarded to the server.
-	// It returns true if the packet should be forwarded, otherwise false.
-	ProcessClient(packet packet.Packet) bool
-
-	// ProcessPreTransfer is called before transferring the client to a different server.
-	// It can be used for pre-processing tasks before the client transfer starts.
-	// The 'addr' parameter represents the address of the target server.
-	// It returns true if the transfer process should proceed, otherwise false.
-	ProcessPreTransfer(addr string) bool
-	// ProcessPostTransfer is called after transferring the client to a different server.
-	// It can be used for post-processing tasks after the client transfer completes.
-	// The 'addr' parameter represents the address of the target server.
-	// Although this method returns a boolean value, it is not currently used and exists for the sake of completeness.
-	ProcessPostTransfer(addr string) bool
-
-	// ProcessDisconnection is called when the client disconnects from the server.
-	// It can be used for post-processing tasks after the disconnection occurs.
-	// Although this method returns a boolean value, it is not currently used and exists for the sake of completeness.
-	ProcessDisconnection() bool
+// Context represents the context of an action. It holds the state of whether the action has been canceled.
+type Context struct {
+	canceled bool
 }
+
+// NewContext returns a new context.
+func NewContext() *Context {
+	return &Context{}
+}
+
+// Cancel marks the context as canceled. This function is used to stop further processing of an action.
+func (c *Context) Cancel() {
+	c.canceled = true
+}
+
+// Cancelled returns whether the context has been cancelled.
+func (c *Context) Cancelled() bool {
+	return c.canceled
+}
+
+// Processor defines methods for processing various actions within a proxy session.
+type Processor interface {
+	// ProcessStartGame is called only once during the login sequence.
+	ProcessStartGame(ctx *Context, data *minecraft.GameData)
+	// ProcessServer is called before forwarding the server-sent packets to the client.
+	ProcessServer(ctx *Context, pk packet.Packet)
+	// ProcessClient is called before forwarding the client-sent packets to the server.
+	ProcessClient(ctx *Context, pk packet.Packet)
+	// ProcessPreTransfer is called before transferring the player to a different server.
+	ProcessPreTransfer(ctx *Context, origin *string, target *string)
+	// ProcessPostTransfer is called after transferring the player to a different server.
+	ProcessPostTransfer(ctx *Context, origin *string, target *string)
+	// ProcessDisconnection is called when the player disconnects from the proxy.
+	ProcessDisconnection(ctx *Context)
+}
+
+// NopProcessor is a no-operation implementation of the Processor interface.
+type NopProcessor struct{}
+
+// Ensure that NopProcessor satisfies the Processor interface.
+var _ Processor = NopProcessor{}
+
+func (NopProcessor) ProcessStartGame(_ *Context, _ *minecraft.GameData)   {}
+func (NopProcessor) ProcessServer(_ *Context, _ packet.Packet)            {}
+func (NopProcessor) ProcessClient(_ *Context, _ packet.Packet)            {}
+func (NopProcessor) ProcessPreTransfer(_ *Context, _ *string, _ *string)  {}
+func (NopProcessor) ProcessPostTransfer(_ *Context, _ *string, _ *string) {}
+func (NopProcessor) ProcessDisconnection(_ *Context)                      {}
