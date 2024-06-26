@@ -70,7 +70,7 @@ func (a *API) Listen(addr string) (err error) {
 func (a *API) Accept() (err error) {
 	conn, err := a.listener.Accept()
 	if err != nil {
-		a.logger.Error("sailed to accept connection", "err", err)
+		a.logger.Error("failed to accept connection", "err", err)
 		return err
 	}
 
