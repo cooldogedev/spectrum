@@ -54,6 +54,7 @@ func NewSession(clientConn *minecraft.Conn, logger *slog.Logger, registry *Regis
 		transport: transport,
 
 		animation: &animation.Dimension{},
+		processor: NopProcessor{},
 		tracker:   NewTracker(),
 
 		ch: make(chan struct{}),
@@ -85,7 +86,9 @@ func (s *Session) Login() (err error) {
 		return fmt.Errorf("spawn sequence failed: %v", err)
 	}
 
-	if err := s.clientConn.StartGame(serverConn.GameData()); err != nil {
+	gameData := serverConn.GameData()
+	s.processor.ProcessStartGame(NewContext(), &gameData)
+	if err := s.clientConn.StartGame(gameData); err != nil {
 		return fmt.Errorf("startgame sequence failed: %v", err)
 	}
 
@@ -117,7 +120,9 @@ func (s *Session) Transfer(addr string) error {
 		return errors.New("already connected to this server")
 	}
 
-	if s.processor != nil && !s.processor.ProcessPreTransfer(addr) {
+	ctx := NewContext()
+	s.processor.ProcessPreTransfer(ctx, &s.serverAddr, &addr)
+	if ctx.Cancelled() {
 		return errors.New("processor failed")
 	}
 
@@ -202,9 +207,7 @@ func (s *Session) Transfer(addr string) error {
 	s.serverAddr = addr
 	s.serverConn = conn
 
-	if s.processor != nil {
-		s.processor.ProcessPostTransfer(addr)
-	}
+	s.processor.ProcessPostTransfer(NewContext(), &s.serverAddr, &addr)
 	s.logger.Debug("transferred session", "username", s.clientConn.IdentityData().DisplayName, "addr", addr)
 	return nil
 }
@@ -259,11 +262,7 @@ func (s *Session) Close() (err error) {
 	default:
 		close(s.ch)
 		s.closed.Store(true)
-
-		if s.processor != nil {
-			s.processor.ProcessDisconnection()
-			s.processor = nil
-		}
+		s.processor.ProcessDisconnection(NewContext())
 
 		_ = s.clientConn.Close()
 		if s.serverConn != nil {
