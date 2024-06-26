@@ -29,7 +29,18 @@ func handleIncoming(s *Session) {
 				if !s.closed.Load() {
 					s.logger.Error("failed to read packet from server", "err", err)
 				}
-				return
+
+				fallbackServer, err := s.discovery.DiscoverFallback(s.clientConn)
+				if err != nil {
+					s.logger.Debug("failed to discover a fallback server", "err", err)
+					return
+				}
+
+				if err := s.Transfer(fallbackServer); err != nil {
+					s.logger.Error("failed to transfer to the fallback server", "addr", fallbackServer, "err", err)
+					return
+				}
+				continue
 			}
 
 			switch pk := pk.(type) {
