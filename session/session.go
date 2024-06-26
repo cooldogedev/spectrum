@@ -268,6 +268,19 @@ func (s *Session) dial(addr string) (*server.Conn, error) {
 	return server.NewConn(conn, packet.NewServerPool()), nil
 }
 
+func (s *Session) fallback() (err error) {
+	addr, err := s.discovery.DiscoverFallback(s.clientConn)
+	if err != nil {
+		return err
+	}
+
+	if err := s.Transfer(addr); err != nil {
+		return err
+	}
+	s.logger.Debug("transferred session to a fallback server", "username", s.clientConn.IdentityData().DisplayName, "addr", addr)
+	return
+}
+
 func (s *Session) sendMetadata(noAI bool) {
 	metadata := protocol.NewEntityMetadata()
 	if noAI {

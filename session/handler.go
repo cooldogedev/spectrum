@@ -27,20 +27,14 @@ func handleIncoming(s *Session) {
 				}
 
 				if !s.closed.Load() {
-					s.logger.Error("failed to read packet from server", "err", err)
+					s.logger.Error("failed to read packet from server", "username", s.clientConn.IdentityData().DisplayName, "err", err)
+					if err := s.fallback(); err != nil {
+						s.logger.Error("fallback failed", "username", s.clientConn.IdentityData().DisplayName, "err", err)
+					} else {
+						continue
+					}
 				}
-
-				fallbackServer, err := s.discovery.DiscoverFallback(s.clientConn)
-				if err != nil {
-					s.logger.Debug("failed to discover a fallback server", "err", err)
-					return
-				}
-
-				if err := s.Transfer(fallbackServer); err != nil {
-					s.logger.Error("failed to transfer to the fallback server", "addr", fallbackServer, "err", err)
-					return
-				}
-				continue
+				return
 			}
 
 			switch pk := pk.(type) {
@@ -101,7 +95,6 @@ func handleOutgoing(s *Session) {
 
 			if err := s.Server().WritePacket(pk); err != nil {
 				s.logger.Error("failed to write packet to server", "err", err)
-				return
 			}
 		}
 	}
@@ -122,11 +115,12 @@ func handleLatency(s *Session, interval int64) {
 				continue
 			}
 
-			if err := s.Server().WritePacket(&packet.Latency{Latency: s.clientConn.Latency().Milliseconds(), Timestamp: time.Now().UnixMilli()}); err != nil {
-				if !s.closed.Load() {
-					s.logger.Error("failed to send latency packet", "err", err)
-				}
-				return
+			err := s.Server().WritePacket(&packet.Latency{
+				Latency:   s.clientConn.Latency().Milliseconds(),
+				Timestamp: time.Now().UnixMilli(),
+			})
+			if err != nil && !s.closed.Load() {
+				s.logger.Error("failed to send latency packet", "err", err)
 			}
 		}
 	}
