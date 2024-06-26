@@ -61,6 +61,7 @@ func (q *QUIC) openConnection(addr string) (quic.Connection, error) {
 			InitialConnectionReceiveWindow: 1024 * 1024 * 10,
 			MaxConnectionReceiveWindow:     1024 * 1024 * 10,
 			AllowConnectionWindowIncrease:  func(conn quic.Connection, delta uint64) bool { return false },
+			KeepAlivePeriod:                0,
 			InitialPacketSize:              1350,
 			DisablePathMTUDiscovery:        false,
 			Tracer:                         qlog.DefaultConnectionTracer,
