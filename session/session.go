@@ -35,11 +35,12 @@ type Session struct {
 	processor Processor
 	tracker   *Tracker
 
+	loggedIn     atomic.Bool
 	transferring atomic.Bool
 
-	loggedIn atomic.Bool
-	closed   atomic.Bool
-	ch       chan struct{}
+	ch     chan struct{}
+	closed atomic.Bool
+	once   sync.Once
 }
 
 func NewSession(clientConn *minecraft.Conn, logger *slog.Logger, registry *Registry, discovery server.Discovery, opts util.Opts, transport transport.Transport) *Session {
@@ -235,10 +236,7 @@ func (s *Session) Disconnect(message string) {
 }
 
 func (s *Session) Close() (err error) {
-	select {
-	case <-s.ch:
-		return errors.New("already closed")
-	default:
+	s.once.Do(func() {
 		close(s.ch)
 		s.closed.Store(true)
 
@@ -259,8 +257,8 @@ func (s *Session) Close() (err error) {
 		} else {
 			s.logger.Debug("closed unlogged session", "username", identity.DisplayName)
 		}
-		return
-	}
+	})
+	return
 }
 
 func (s *Session) dial(addr string) (*server.Conn, error) {
