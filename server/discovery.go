@@ -4,18 +4,25 @@ import "github.com/sandertv/gophertunnel/minecraft"
 
 type Discovery interface {
 	Discover(conn *minecraft.Conn) (string, error)
+	DiscoverFallback(conn *minecraft.Conn) (string, error)
 }
 
 type StaticDiscovery struct {
-	server string
+	server         string
+	fallbackServer string
 }
 
-func (s *StaticDiscovery) Discover(*minecraft.Conn) (string, error) {
+func NewStaticDiscovery(server string, fallbackServer string) *StaticDiscovery {
+	return &StaticDiscovery{
+		server:         server,
+		fallbackServer: fallbackServer,
+	}
+}
+
+func (s *StaticDiscovery) Discover(_ *minecraft.Conn) (string, error) {
 	return s.server, nil
 }
 
-func NewStaticDiscovery(server string) *StaticDiscovery {
-	return &StaticDiscovery{
-		server: server,
-	}
+func (s *StaticDiscovery) DiscoverFallback(_ *minecraft.Conn) (string, error) {
+	return s.fallbackServer, nil
 }
