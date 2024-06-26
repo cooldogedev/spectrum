@@ -12,7 +12,7 @@ import (
 
 func main() {
 	logger := slog.Default()
-	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery("127.0.0.1:19133"), logger, nil, transport.NewRakNet())
+	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery("127.0.0.1:19133", ""), logger, nil, transport.NewRakNet())
 	if err := proxy.Listen(minecraft.ListenConfig{StatusProvider: util.NewStatusProvider("Spectrum Proxy", "Spectrum")}); err != nil {
 		return
 	}
