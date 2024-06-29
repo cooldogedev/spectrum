@@ -30,20 +30,20 @@ type Conn struct {
 	compressor packet.Compression
 
 	reader *proto.Reader
+	writer *proto.Writer
 
-	writer  *proto.Writer
-	writeMu sync.Mutex
-
-	gameData  minecraft.GameData
 	runtimeID uint64
 	uniqueID  int64
-	shieldID  int32
 
-	pool            packet.Pool
-	header          packet.Header
+	gameData minecraft.GameData
+	shieldID int32
+
 	deferredPackets []packet.Packet
+	header          packet.Header
+	pool            packet.Pool
 
-	closed chan struct{}
+	ch chan struct{}
+	mu sync.Mutex
 }
 
 // NewConn creates a new Conn with the conn and pool passed.
@@ -55,10 +55,10 @@ func NewConn(conn io.ReadWriteCloser, pool packet.Pool) *Conn {
 		reader: proto.NewReader(conn),
 		writer: proto.NewWriter(conn),
 
-		pool:   pool,
 		header: packet.Header{},
+		pool:   pool,
 
-		closed: make(chan struct{}),
+		ch: make(chan struct{}),
 	}
 }
 
@@ -76,8 +76,8 @@ func (c *Conn) ReadPacket() (any, error) {
 
 // WritePacket writes a packet to the connection. It returns an error if the packet could not be written.
 func (c *Conn) WritePacket(pk packet.Packet) error {
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	buf := internal.BufferPool.Get().(*bytes.Buffer)
 	defer func() {
@@ -125,8 +125,7 @@ func (c *Conn) Connect(client *minecraft.Conn, token string) (err error) {
 	return
 }
 
-// Spawn will start the spawning sequence using the game data found in conn.GameData(), which was
-// sent earlier by the server.
+// Spawn will start the spawning sequence.
 func (c *Conn) Spawn() (err error) {
 	startGamePacket, err := c.expect(packet.IDStartGame, false)
 	if err != nil {
@@ -157,7 +156,6 @@ func (c *Conn) Spawn() (err error) {
 			break
 		}
 	}
-
 	c.gameData = minecraft.GameData{
 		WorldName:                    startGame.WorldName,
 		WorldSeed:                    startGame.WorldSeed,
@@ -203,11 +201,10 @@ func (c *Conn) GameData() minecraft.GameData {
 // Close ...
 func (c *Conn) Close() (err error) {
 	select {
-	case <-c.closed:
+	case <-c.ch:
 		return errors.New("already closed")
 	default:
-		close(c.closed)
-		_ = c.WritePacket(&packet.Disconnect{})
+		close(c.ch)
 		_ = c.conn.Close()
 		return
 	}
@@ -217,7 +214,7 @@ func (c *Conn) Close() (err error) {
 // be read.
 func (c *Conn) read(decode bool) (any, error) {
 	select {
-	case <-c.closed:
+	case <-c.ch:
 		return nil, errors.New("closed connection")
 	default:
 		payload, err := c.reader.ReadPacket()
@@ -261,7 +258,6 @@ func (c *Conn) decode(payload []byte) (pk packet.Packet, err error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown packet ID %v", header.PacketID)
 	}
-
 	pk = factory()
 	pk.Marshal(protocol.NewReader(buf, c.shieldID, false))
 	return pk, nil
@@ -270,20 +266,19 @@ func (c *Conn) decode(payload []byte) (pk packet.Packet, err error) {
 // expect reads a packet from the connection and expects it to have the ID passed. If the packet read does not
 // have the ID passed, it will be deferred and the function will be called again until a packet with the ID
 // passed is read. It returns the packet read, or an error if the packet could not be read.
-func (c *Conn) expect(id uint32, deferrable bool) (pk packet.Packet, err error) {
+func (c *Conn) expect(id uint32, deferrable bool) (packet.Packet, error) {
 	payload, err := c.read(true)
 	if err != nil {
 		return nil, err
 	}
 
-	pk, _ = payload.(packet.Packet)
-	if pk.ID() != id {
+	pk := payload.(packet.Packet)
+	if pk.ID() != id || deferrable {
 		c.deferredPackets = append(c.deferredPackets, pk)
-		return c.expect(id, deferrable)
 	}
 
-	if deferrable {
-		c.deferredPackets = append(c.deferredPackets, pk)
+	if pk.ID() == id {
+		return pk, nil
 	}
-	return
+	return c.expect(id, deferrable)
 }
