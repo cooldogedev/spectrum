@@ -11,6 +11,7 @@ import (
 	"github.com/cooldogedev/spectrum/internal"
 	proto "github.com/cooldogedev/spectrum/protocol"
 	packet2 "github.com/cooldogedev/spectrum/server/packet"
+	"github.com/golang/snappy"
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
@@ -26,9 +27,7 @@ const shieldRuntimeID = "minecraft:shield"
 // Conn is a connection to a server. It is used to read and write packets to the server, and to manage the
 // connection to the server.
 type Conn struct {
-	conn       io.ReadWriteCloser
-	compressor packet.Compression
-
+	conn   io.ReadWriteCloser
 	reader *proto.Reader
 	writer *proto.Writer
 
@@ -49,9 +48,7 @@ type Conn struct {
 // NewConn creates a new Conn with the conn and pool passed.
 func NewConn(conn io.ReadWriteCloser, pool packet.Pool) *Conn {
 	return &Conn{
-		conn:       conn,
-		compressor: packet.FlateCompression,
-
+		conn:   conn,
 		reader: proto.NewReader(conn),
 		writer: proto.NewWriter(conn),
 
@@ -89,13 +86,8 @@ func (c *Conn) WritePacket(pk packet.Packet) error {
 	if err := c.header.Write(buf); err != nil {
 		return err
 	}
-
 	pk.Marshal(protocol.NewWriter(buf, c.shieldID))
-	data, err := c.compressor.Compress(buf.Bytes())
-	if err != nil {
-		return err
-	}
-	return c.writer.Write(data)
+	return c.writer.Write(snappy.Encode(nil, buf.Bytes()))
 }
 
 // Connect send a connection request to the server with the client and token passed. It returns
@@ -222,7 +214,7 @@ func (c *Conn) read(decode bool) (any, error) {
 			return nil, err
 		}
 
-		decompressed, err := c.compressor.Decompress(payload[1:])
+		decompressed, err := snappy.Decode(nil, payload[1:])
 		if err != nil {
 			return nil, err
 		}
