@@ -30,22 +30,18 @@ func NewClient(conn net.Conn, pool packet.Pool) *Client {
 }
 
 func (c *Client) ReadPacket() (pk packet.Packet, err error) {
-	payload, err := c.reader.ReadPacket()
-	if err != nil {
-		return nil, err
-	}
-
-	buf := internal.BufferPool.Get().(*bytes.Buffer)
-	buf.Write(payload)
 	defer func() {
-		buf.Reset()
-		internal.BufferPool.Put(buf)
-
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic while decoding packet: %v", r)
 		}
 	}()
 
+	payload, err := c.reader.ReadPacket()
+	if err != nil {
+		return nil, err
+	}
+
+	buf := bytes.NewBuffer(payload)
 	var packetID uint32
 	if err := binary.Read(buf, binary.LittleEndian, &packetID); err != nil {
 		return nil, err
@@ -55,7 +51,6 @@ func (c *Client) ReadPacket() (pk packet.Packet, err error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown packet ID: %v", packetID)
 	}
-
 	pk = factory()
 	pk.Decode(buf)
 	return
@@ -71,7 +66,6 @@ func (c *Client) WritePacket(pk packet.Packet) error {
 	if err := binary.Write(buf, binary.LittleEndian, pk.ID()); err != nil {
 		return err
 	}
-
 	pk.Encode(buf)
 	return c.writer.Write(buf.Bytes())
 }
