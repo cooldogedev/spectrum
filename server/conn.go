@@ -238,17 +238,13 @@ func (c *Conn) read(decode bool) (any, error) {
 
 // decode decodes a packet payload and returns the decoded packet or an error if the packet could not be decoded.
 func (c *Conn) decode(payload []byte) (pk packet.Packet, err error) {
-	buf := internal.BufferPool.Get().(*bytes.Buffer)
-	buf.Write(payload)
 	defer func() {
-		buf.Reset()
-		internal.BufferPool.Put(buf)
-
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic while reading packet: %v", r)
 		}
 	}()
 
+	buf := bytes.NewBuffer(payload)
 	header := &packet.Header{}
 	if err := header.Read(buf); err != nil {
 		return nil, err
