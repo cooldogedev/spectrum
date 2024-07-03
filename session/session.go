@@ -106,26 +106,29 @@ func (s *Session) Login() (err error) {
 	return
 }
 
-func (s *Session) Transfer(addr string) error {
+func (s *Session) Transfer(addr string) (err error) {
 	if !s.transferring.CompareAndSwap(false, true) {
 		return errors.New("already transferring")
 	}
 
-	s.serverMu.Lock()
-	defer func() {
-		s.serverMu.Unlock()
-		s.transferring.Store(false)
-	}()
-
-	if s.serverAddr == addr {
-		return errors.New("already connected to this server")
-	}
+	defer s.transferring.Store(false)
 
 	ctx := NewContext()
 	s.processor.ProcessPreTransfer(ctx, &s.serverAddr, &addr)
 	if ctx.Cancelled() {
 		return errors.New("processor failed")
 	}
+
+	if s.serverAddr == addr {
+		return errors.New("already connected to this server")
+	}
+
+	s.serverMu.Lock()
+	defer func() {
+		if err != nil {
+			s.serverMu.Unlock()
+		}
+	}()
 
 	conn, err := s.dial(addr)
 	if err != nil {
@@ -145,6 +148,7 @@ func (s *Session) Transfer(addr string) error {
 		return fmt.Errorf("spawn sequence failed: %v", err)
 	}
 
+	_ = s.serverConn.Close()
 	serverGameData := conn.GameData()
 	s.animation.Play(s.clientConn, serverGameData)
 
@@ -176,19 +180,16 @@ func (s *Session) Transfer(addr string) error {
 		Yaw:             serverGameData.Yaw,
 		Mode:            packet.MoveModeReset,
 	})
-	_ = s.clientConn.WritePacket(&packet.LevelEvent{
-		EventType: packet.LevelEventStopRaining,
-		EventData: 10_000,
-	})
+	_ = s.clientConn.WritePacket(&packet.LevelEvent{EventType: packet.LevelEventStopRaining, EventData: 10_000})
 	_ = s.clientConn.WritePacket(&packet.LevelEvent{EventType: packet.LevelEventStopThunderstorm})
 	_ = s.clientConn.WritePacket(&packet.SetDifficulty{Difficulty: uint32(serverGameData.Difficulty)})
 	_ = s.clientConn.WritePacket(&packet.SetPlayerGameType{GameType: serverGameData.PlayerGameMode})
 	_ = s.clientConn.WritePacket(&packet.GameRulesChanged{GameRules: serverGameData.GameRules})
 
 	s.animation.Clear(s.clientConn, serverGameData)
-	_ = s.serverConn.Close()
 	s.serverAddr = addr
 	s.serverConn = conn
+	s.serverMu.Unlock()
 
 	s.processor.ProcessPostTransfer(NewContext(), &s.serverAddr, &addr)
 	s.logger.Debug("transferred session", "username", s.clientConn.IdentityData().DisplayName, "addr", addr)

@@ -1,11 +1,18 @@
 package session
 
 import (
+	"errors"
+	"net"
 	"strings"
 	"time"
 
-	"github.com/cooldogedev/spectrum/server/packet"
-	packet2 "github.com/sandertv/gophertunnel/minecraft/protocol/packet"
+	packet2 "github.com/cooldogedev/spectrum/server/packet"
+	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
+)
+
+const (
+	errClosedNetworkConn = "closed network connection"
+	errClosedStream      = "closed stream"
 )
 
 func handleIncoming(s *Session) {
@@ -27,7 +34,10 @@ func handleIncoming(s *Session) {
 				}
 
 				if !s.closed.Load() {
-					s.logger.Error("failed to read packet from server", "username", s.clientConn.IdentityData().DisplayName, "err", err)
+					if isErrorLoggable(err) {
+						s.logger.Error("failed to read packet from server", "username", s.clientConn.IdentityData().DisplayName, "err", err)
+					}
+
 					if err := s.fallback(); err != nil {
 						s.logger.Error("fallback failed", "username", s.clientConn.IdentityData().DisplayName, "err", err)
 					} else {
@@ -38,13 +48,13 @@ func handleIncoming(s *Session) {
 			}
 
 			switch pk := pk.(type) {
-			case *packet.Latency:
+			case *packet2.Latency:
 				s.serverLatency = pk.Latency
-			case *packet.Transfer:
+			case *packet2.Transfer:
 				if err := s.Transfer(pk.Addr); err != nil {
 					s.logger.Error("failed to transfer", "err", err)
 				}
-			case packet2.Packet:
+			case packet.Packet:
 				ctx := NewContext()
 				s.processor.ProcessServer(ctx, pk)
 				if ctx.Cancelled() {
@@ -52,17 +62,19 @@ func handleIncoming(s *Session) {
 				}
 
 				s.tracker.handlePacket(pk)
-				if err := s.clientConn.WritePacket(pk); err != nil {
-					if !strings.Contains(err.Error(), "closed network connection") {
-						s.logger.Error("failed to write packet to client", "err", err)
-					}
-					return
+				if err := s.clientConn.WritePacket(pk); err != nil && isErrorLoggable(err) {
+					s.logger.Error("failed to write packet to client", "err", err)
+				} else {
+					continue
 				}
+				return
 			case []byte:
-				if _, err := s.clientConn.Write(pk); err != nil {
+				if _, err := s.clientConn.Write(pk); err != nil && isErrorLoggable(err) {
 					s.logger.Error("failed to write raw packet to client", "err", err)
-					return
+				} else {
+					continue
 				}
+				return
 			}
 		}
 	}
@@ -75,25 +87,25 @@ func handleOutgoing(s *Session) {
 		case <-s.ch:
 			return
 		default:
-			if s.transferring.Load() {
-				continue
-			}
-
 			pk, err := s.clientConn.ReadPacket()
 			if err != nil {
-				if !strings.Contains(err.Error(), "closed network connection") {
+				if isErrorLoggable(err) {
 					s.logger.Error("failed to read packet from client", "err", err)
 				}
 				return
 			}
 
 			ctx := NewContext()
+			if s.transferring.Load() {
+				ctx.Cancel()
+			}
+
 			s.processor.ProcessClient(ctx, pk)
 			if ctx.Cancelled() {
 				continue
 			}
 
-			if err := s.Server().WritePacket(pk); err != nil {
+			if err := s.Server().WritePacket(pk); err != nil && isErrorLoggable(err) {
 				s.logger.Error("failed to write packet to server", "err", err)
 			}
 		}
@@ -115,7 +127,7 @@ func handleLatency(s *Session, interval int64) {
 				continue
 			}
 
-			err := s.Server().WritePacket(&packet.Latency{
+			err := s.Server().WritePacket(&packet2.Latency{
 				Latency:   s.clientConn.Latency().Milliseconds(),
 				Timestamp: time.Now().UnixMilli(),
 			})
@@ -124,4 +136,8 @@ func handleLatency(s *Session, interval int64) {
 			}
 		}
 	}
+}
+
+func isErrorLoggable(err error) bool {
+	return !errors.Is(err, net.ErrClosed) && !strings.Contains(err.Error(), errClosedStream) && !strings.Contains(err.Error(), errClosedNetworkConn)
 }
