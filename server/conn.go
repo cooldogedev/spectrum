@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"sync"
 
 	"github.com/cooldogedev/spectrum/internal"
@@ -215,7 +216,7 @@ func (c *Conn) Close() (err error) {
 func (c *Conn) read(decode bool) (any, error) {
 	select {
 	case <-c.ch:
-		return nil, errors.New("closed connection")
+		return nil, net.ErrClosed
 	default:
 		payload, err := c.reader.ReadPacket()
 		if err != nil {
