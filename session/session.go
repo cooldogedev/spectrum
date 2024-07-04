@@ -79,7 +79,7 @@ func (s *Session) Login() (err error) {
 
 	s.serverAddr = serverAddr
 	s.serverConn = serverConn
-	if err := serverConn.Connect(s.clientConn, s.opts.Token); err != nil {
+	if err := serverConn.Connect(); err != nil {
 		return fmt.Errorf("connection sequence failed: %v", err)
 	}
 
@@ -136,7 +136,7 @@ func (s *Session) Transfer(addr string) (err error) {
 	}
 
 	s.sendMetadata(true)
-	if err := conn.Connect(s.clientConn, s.opts.Token); err != nil {
+	if err := conn.Connect(); err != nil {
 		_ = conn.Close()
 		s.sendMetadata(false)
 		return fmt.Errorf("connection sequence failed: %v", err)
@@ -266,7 +266,7 @@ func (s *Session) dial(addr string) (*server.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return server.NewConn(conn, packet.NewServerPool()), nil
+	return server.NewConn(conn, s.clientConn.RemoteAddr(), s.opts.Token, s.clientConn.ClientData(), s.clientConn.IdentityData(), packet.NewServerPool()), nil
 }
 
 func (s *Session) fallback() (err error) {
