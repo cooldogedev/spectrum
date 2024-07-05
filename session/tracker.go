@@ -9,7 +9,7 @@ import (
 	"github.com/scylladb/go-set/strset"
 )
 
-type Tracker struct {
+type tracker struct {
 	bossBars    *i64set.Set
 	effects     *i32set.Set
 	entities    *i64set.Set
@@ -17,8 +17,8 @@ type Tracker struct {
 	scoreboards *strset.Set
 }
 
-func NewTracker() *Tracker {
-	return &Tracker{
+func newTracker() *tracker {
+	return &tracker{
 		bossBars:    i64set.New(),
 		effects:     i32set.New(),
 		entities:    i64set.New(),
@@ -27,7 +27,7 @@ func NewTracker() *Tracker {
 	}
 }
 
-func (t *Tracker) handlePacket(pk packet.Packet) {
+func (t *tracker) handlePacket(pk packet.Packet) {
 	switch pk := pk.(type) {
 	case *packet.AddActor:
 		t.entities.Add(pk.EntityUniqueID)
@@ -62,7 +62,7 @@ func (t *Tracker) handlePacket(pk packet.Packet) {
 	}
 }
 
-func (t *Tracker) clearBossBars(s *Session) {
+func (t *tracker) clearBossBars(s *Session) {
 	t.bossBars.Each(func(i int64) bool {
 		_ = s.clientConn.WritePacket(&packet.BossEvent{
 			BossEntityUniqueID: i,
@@ -73,7 +73,7 @@ func (t *Tracker) clearBossBars(s *Session) {
 	t.bossBars.Clear()
 }
 
-func (t *Tracker) clearEffects(s *Session) {
+func (t *tracker) clearEffects(s *Session) {
 	t.effects.Each(func(i int32) bool {
 		_ = s.clientConn.WritePacket(&packet.MobEffect{
 			EntityRuntimeID: s.clientConn.GameData().EntityRuntimeID,
@@ -85,7 +85,7 @@ func (t *Tracker) clearEffects(s *Session) {
 	t.effects.Clear()
 }
 
-func (t *Tracker) clearEntities(s *Session) {
+func (t *tracker) clearEntities(s *Session) {
 	t.entities.Each(func(i int64) bool {
 		_ = s.clientConn.WritePacket(&packet.RemoveActor{
 			EntityUniqueID: i,
@@ -95,7 +95,7 @@ func (t *Tracker) clearEntities(s *Session) {
 	t.entities.Clear()
 }
 
-func (t *Tracker) clearPlayers(s *Session) {
+func (t *tracker) clearPlayers(s *Session) {
 	entries := make([]protocol.PlayerListEntry, 0)
 	t.players.Each(func(i [16]byte) bool {
 		entries = append(entries, protocol.PlayerListEntry{
@@ -111,7 +111,7 @@ func (t *Tracker) clearPlayers(s *Session) {
 	})
 }
 
-func (t *Tracker) clearScoreboards(s *Session) {
+func (t *tracker) clearScoreboards(s *Session) {
 	t.scoreboards.Each(func(i string) bool {
 		_ = s.clientConn.WritePacket(&packet.RemoveObjective{
 			ObjectiveName: i,
