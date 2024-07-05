@@ -82,6 +82,7 @@ func handleIncoming(s *Session) {
 
 func handleOutgoing(s *Session) {
 	defer s.Close()
+	var deferredPackets []packet.Packet
 	for {
 		select {
 		case <-s.ch:
@@ -95,19 +96,18 @@ func handleOutgoing(s *Session) {
 				return
 			}
 
-			ctx := NewContext()
-			if s.transferring.Load() {
-				ctx.Cancel()
-			}
-
-			s.processor.ProcessClient(ctx, pk)
-			if ctx.Cancelled() {
+			if !s.loggedIn.Load() {
+				deferredPackets = append(deferredPackets, pk)
 				continue
 			}
 
-			if err := s.Server().WritePacket(pk); err != nil && isErrorLoggable(err) {
-				s.logger.Error("failed to write packet to server", "err", err)
+			if len(deferredPackets) > 0 {
+				for _, deferredPacket := range deferredPackets {
+					sendOutgoing(s, deferredPacket)
+				}
+				deferredPackets = nil
 			}
+			sendOutgoing(s, pk)
 		}
 	}
 }
@@ -140,4 +140,20 @@ func handleLatency(s *Session, interval int64) {
 
 func isErrorLoggable(err error) bool {
 	return !errors.Is(err, net.ErrClosed) && !strings.Contains(err.Error(), errClosedStream) && !strings.Contains(err.Error(), errClosedNetworkConn)
+}
+
+func sendOutgoing(s *Session, pk packet.Packet) {
+	ctx := NewContext()
+	if s.transferring.Load() {
+		ctx.Cancel()
+	}
+
+	s.processor.ProcessClient(ctx, pk)
+	if ctx.Cancelled() {
+		return
+	}
+
+	if err := s.Server().WritePacket(pk); err != nil && isErrorLoggable(err) {
+		s.logger.Error("failed to write packet to server", "err", err)
+	}
 }

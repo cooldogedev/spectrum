@@ -33,7 +33,7 @@ type Session struct {
 
 	animation animation.Animation
 	processor Processor
-	tracker   *Tracker
+	tracker   *tracker
 
 	loggedIn     atomic.Bool
 	transferring atomic.Bool
@@ -56,7 +56,7 @@ func NewSession(clientConn *minecraft.Conn, logger *slog.Logger, registry *Regis
 
 		animation: &animation.Dimension{},
 		processor: NopProcessor{},
-		tracker:   NewTracker(),
+		tracker:   newTracker(),
 
 		ch: make(chan struct{}),
 	}
@@ -66,6 +66,10 @@ func NewSession(clientConn *minecraft.Conn, logger *slog.Logger, registry *Regis
 
 func (s *Session) Login() (err error) {
 	defer s.serverMu.Unlock()
+
+	go handleIncoming(s)
+	go handleOutgoing(s)
+	go handleLatency(s, s.opts.LatencyInterval)
 
 	serverAddr, err := s.discovery.Discover(s.clientConn)
 	if err != nil {
@@ -93,13 +97,8 @@ func (s *Session) Login() (err error) {
 		return fmt.Errorf("startgame sequence failed: %v", err)
 	}
 
-	s.sendMetadata(true)
-
-	go handleIncoming(s)
-	go handleOutgoing(s)
-	go handleLatency(s, s.opts.LatencyInterval)
-
 	identityData := s.clientConn.IdentityData()
+	s.sendMetadata(true)
 	s.loggedIn.Store(true)
 	s.registry.AddSession(identityData.XUID, s)
 	s.logger.Info("logged in session", "username", identityData.DisplayName)

@@ -160,7 +160,7 @@ func (c *Conn) ConnectContext(ctx context.Context) error {
 	case <-c.closed:
 		return net.ErrClosed
 	case <-ctx.Done():
-		return context.DeadlineExceeded
+		return ctx.Err()
 	case <-c.connected:
 		return nil
 	}
@@ -184,7 +184,7 @@ func (c *Conn) SpawnContext(ctx context.Context) error {
 	case <-c.closed:
 		return net.ErrClosed
 	case <-ctx.Done():
-		return context.DeadlineExceeded
+		return ctx.Err()
 	case <-c.spawned:
 		return nil
 	}
