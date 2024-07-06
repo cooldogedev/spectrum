@@ -22,7 +22,7 @@ func handleIncoming(s *Session) {
 		case <-s.ch:
 			return
 		default:
-			if s.transferring.Load() {
+			if !s.loggedIn.Load() || s.transferring.Load() {
 				continue
 			}
 
@@ -123,7 +123,7 @@ func handleLatency(s *Session, interval int64) {
 		case <-s.ch:
 			return
 		case <-ticker.C:
-			if s.transferring.Load() {
+			if !s.loggedIn.Load() || s.transferring.Load() {
 				continue
 			}
 
