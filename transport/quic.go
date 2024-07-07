@@ -45,7 +45,10 @@ func (q *QUIC) Dial(addr string) (io.ReadWriteCloser, error) {
 }
 
 func (q *QUIC) openStream(s *session) (io.ReadWriteCloser, error) {
-	stream, err := s.conn.OpenStreamSync(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	stream, err := s.conn.OpenStreamSync(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -62,8 +65,11 @@ func (q *QUIC) openStream(s *session) (io.ReadWriteCloser, error) {
 }
 
 func (q *QUIC) createSession(addr string) (*session, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
 	conn, err := quic.DialAddr(
-		context.Background(),
+		ctx,
 		addr,
 		&tls.Config{
 			InsecureSkipVerify: true,
