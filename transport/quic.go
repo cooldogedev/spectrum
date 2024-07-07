@@ -82,10 +82,8 @@ func (q *QUIC) createSession(addr string) (*session, error) {
 			MaxStreamReceiveWindow:         1024 * 1024 * 10,
 			InitialConnectionReceiveWindow: 1024 * 1024 * 10,
 			MaxConnectionReceiveWindow:     1024 * 1024 * 10,
-			AllowConnectionWindowIncrease:  func(conn quic.Connection, delta uint64) bool { return false },
 			KeepAlivePeriod:                time.Second * 5,
 			InitialPacketSize:              1350,
-			DisablePathMTUDiscovery:        false,
 			Tracer:                         qlog.DefaultConnectionTracer,
 		},
 	)
