@@ -50,6 +50,7 @@ func (q *QUIC) openStream(s *session) (io.ReadWriteCloser, error) {
 
 	stream, err := s.conn.OpenStreamSync(ctx)
 	if err != nil {
+		_ = s.conn.CloseWithError(0, "")
 		return nil, err
 	}
 
