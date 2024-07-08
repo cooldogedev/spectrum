@@ -16,7 +16,8 @@ import (
 
 type session struct {
 	conn    quic.Connection
-	counter atomic.Int64
+	counter int32
+	mu      sync.Mutex
 }
 
 type QUIC struct {
@@ -45,21 +46,27 @@ func (q *QUIC) Dial(addr string) (io.ReadWriteCloser, error) {
 }
 
 func (q *QUIC) openStream(s *session) (io.ReadWriteCloser, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	stream, err := s.conn.OpenStreamSync(ctx)
 	if err != nil {
-		_ = s.conn.CloseWithError(0, "")
+		_ = s.conn.CloseWithError(0, "failed to open stream")
 		return nil, err
 	}
 
-	s.counter.Add(1)
+	atomic.AddInt32(&s.counter, 1)
 	go func() {
 		<-stream.Context().Done()
-		s.counter.Add(-1)
-		if s.counter.Load() <= 0 {
-			_ = s.conn.CloseWithError(0, "")
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		atomic.AddInt32(&s.counter, -1)
+		if atomic.LoadInt32(&s.counter) <= 0 {
+			_ = s.conn.CloseWithError(0, "no open streams")
 		}
 	}()
 	return stream, nil
@@ -91,20 +98,21 @@ func (q *QUIC) createSession(addr string) (*session, error) {
 		return nil, err
 	}
 
-	go func() {
-		defer q.remove(addr)
+	s := &session{conn: conn}
+	defer q.add(addr, s)
 
-		ctx := conn.Context()
-		<-ctx.Done()
-		if err := ctx.Err(); err != nil && !errors.Is(context.Canceled, err) {
+	go func() {
+		<-conn.Context().Done()
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		q.remove(addr)
+		if err := conn.Context().Err(); err != nil && !errors.Is(err, context.Canceled) {
 			q.logger.Error("closed connection", "addr", addr, "err", err)
 		} else {
 			q.logger.Debug("closed connection", "addr", addr)
 		}
 	}()
-
-	s := &session{conn: conn}
-	q.add(addr, s)
 	return s, nil
 }
 
