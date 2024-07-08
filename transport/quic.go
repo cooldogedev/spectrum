@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,6 +19,71 @@ type session struct {
 	conn    quic.Connection
 	counter int32
 	mu      sync.Mutex
+	ch      chan struct{}
+	closed  atomic.Bool
+}
+
+func createSession(conn quic.Connection) *session {
+	return &session{
+		conn: conn,
+		ch:   make(chan struct{}),
+	}
+}
+
+func (s *session) openStream() (quic.Stream, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	select {
+	case <-s.ch:
+		return nil, net.ErrClosed
+	default:
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+
+		stream, err := s.conn.OpenStreamSync(ctx)
+		if err != nil {
+			_ = s.close()
+			return nil, err
+		}
+		s.counter++
+		go s.monitorStream(stream.Context())
+		return stream, nil
+	}
+}
+
+func (s *session) monitorStream(ctx context.Context) {
+	select {
+	case <-s.ch:
+	case <-ctx.Done():
+		s.closeStream()
+	}
+}
+
+func (s *session) closeStream() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.counter--
+	if s.counter <= 0 {
+		_ = s.conn.CloseWithError(0, "no open streams")
+	}
+}
+
+func (s *session) close() error {
+	if s.closed.Load() {
+		return net.ErrClosed
+	}
+
+	select {
+	case <-s.ch:
+		return net.ErrClosed
+	default:
+		close(s.ch)
+		s.closed.Store(true)
+		_ = s.conn.CloseWithError(0, "")
+		return nil
+	}
 }
 
 type QUIC struct {
@@ -34,45 +100,19 @@ func NewQUIC(logger *slog.Logger) *QUIC {
 }
 
 func (q *QUIC) Dial(addr string) (io.ReadWriteCloser, error) {
-	if s := q.get(addr); s != nil {
-		return q.openStream(s)
-	}
-
-	s, err := q.createSession(addr)
-	if err != nil {
-		return nil, err
-	}
-	return q.openStream(s)
-}
-
-func (q *QUIC) openStream(s *session) (io.ReadWriteCloser, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	stream, err := s.conn.OpenStreamSync(ctx)
-	if err != nil {
-		_ = s.conn.CloseWithError(0, "failed to open stream")
-		return nil, err
-	}
-
-	atomic.AddInt32(&s.counter, 1)
-	go func() {
-		<-stream.Context().Done()
-		s.mu.Lock()
-		defer s.mu.Unlock()
-
-		atomic.AddInt32(&s.counter, -1)
-		if atomic.LoadInt32(&s.counter) <= 0 {
-			_ = s.conn.CloseWithError(0, "no open streams")
+	if s := q.get(addr); s != nil && !s.closed.Load() {
+		s, err := s.openStream()
+		if err == nil {
+			return s, nil
 		}
-	}()
-	return stream, nil
-}
 
-func (q *QUIC) createSession(addr string) (*session, error) {
+		if errors.Is(err, net.ErrClosed) {
+			return q.Dial(addr)
+		}
+		q.logger.Error("error opening stream", "addr", addr, "err", err)
+		return nil, err
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -97,23 +137,20 @@ func (q *QUIC) createSession(addr string) (*session, error) {
 	if err != nil {
 		return nil, err
 	}
+	go q.monitorConnection(addr, conn.Context())
+	s := createSession(conn)
+	q.add(addr, s)
+	return s.openStream()
+}
 
-	s := &session{conn: conn}
-	defer q.add(addr, s)
-
-	go func() {
-		<-conn.Context().Done()
-		s.mu.Lock()
-		defer s.mu.Unlock()
-
-		q.remove(addr)
-		if err := conn.Context().Err(); err != nil && !errors.Is(err, context.Canceled) {
-			q.logger.Error("closed connection", "addr", addr, "err", err)
-		} else {
-			q.logger.Debug("closed connection", "addr", addr)
-		}
-	}()
-	return s, nil
+func (q *QUIC) monitorConnection(addr string, ctx context.Context) {
+	<-ctx.Done()
+	q.remove(addr)
+	if err := ctx.Err(); err != nil && !errors.Is(err, context.Canceled) {
+		q.logger.Error("closed connection", "addr", addr, "err", err)
+	} else {
+		q.logger.Debug("closed connection", "addr", addr)
+	}
 }
 
 func (q *QUIC) add(addr string, s *session) {
