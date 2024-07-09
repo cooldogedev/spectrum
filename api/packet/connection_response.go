@@ -11,7 +11,10 @@ const (
 	ResponseFail
 )
 
+// ConnectionResponse represents the response sent by the API service
+// in reply to a ConnectionRequest.
 type ConnectionResponse struct {
+	// Response indicates the status of the connection request.
 	Response uint8
 }
 

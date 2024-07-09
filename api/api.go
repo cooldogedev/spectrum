@@ -10,8 +10,12 @@ import (
 	"github.com/cooldogedev/spectrum/session"
 )
 
-type handler = func(packet.Packet) bool
+// handler defines a function for processing incoming packets.
+type handler = func(client *Client, pk packet.Packet)
 
+// API represents a service that enables servers to communicate with the proxy over the TCP protocol.
+// It supports operations such as transferring and kicking players, and allows for the registration
+// of custom packets via packet.Register(). Packets can be handled using RegisterHandler().
 type API struct {
 	authentication Authentication
 	handlers       map[uint32]handler
@@ -22,6 +26,7 @@ type API struct {
 	logger   *slog.Logger
 }
 
+// NewAPI creates a new API service instance using the provided session.Registry.
 func NewAPI(registry *session.Registry, logger *slog.Logger, authentication Authentication) *API {
 	a := &API{
 		authentication: authentication,
@@ -31,7 +36,7 @@ func NewAPI(registry *session.Registry, logger *slog.Logger, authentication Auth
 		closed: make(chan struct{}),
 		logger: logger,
 	}
-	a.RegisterHandler(packet.IDKick, func(pk packet.Packet) bool {
+	a.RegisterHandler(packet.IDKick, func(_ *Client, pk packet.Packet) {
 		username := pk.(*packet.Kick).Username
 		reason := pk.(*packet.Kick).Username
 		if s := a.registry.GetSessionByUsername(username); s != nil {
@@ -39,9 +44,8 @@ func NewAPI(registry *session.Registry, logger *slog.Logger, authentication Auth
 		} else {
 			a.logger.Debug("tried to disconnect an unknown player", "username", username, "reason", reason)
 		}
-		return true
 	})
-	a.RegisterHandler(packet.IDTransfer, func(pk packet.Packet) bool {
+	a.RegisterHandler(packet.IDTransfer, func(_ *Client, pk packet.Packet) {
 		username := pk.(*packet.Transfer).Username
 		addr := pk.(*packet.Transfer).Addr
 		if s := a.registry.GetSessionByUsername(username); s != nil {
@@ -51,11 +55,11 @@ func NewAPI(registry *session.Registry, logger *slog.Logger, authentication Auth
 		} else {
 			a.logger.Debug("tried to transfer an unknown player", "username", username, "addr", addr)
 		}
-		return true
 	})
 	return a
 }
 
+// Listen sets up a net.Listener for incoming connections based on the specified address.
 func (a *API) Listen(addr string) (err error) {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -67,6 +71,7 @@ func (a *API) Listen(addr string) (err error) {
 	return
 }
 
+// Accept accepts an incoming client connection and handles it.
 func (a *API) Accept() (err error) {
 	conn, err := a.listener.Accept()
 	if err != nil {
@@ -84,10 +89,12 @@ func (a *API) Accept() (err error) {
 	return
 }
 
+// RegisterHandler registers a handler for the specified packet.
 func (a *API) RegisterHandler(packet uint32, h handler) {
 	a.handlers[packet] = h
 }
 
+// Close closes the listener and all connected clients.
 func (a *API) Close() (err error) {
 	select {
 	case <-a.closed:
@@ -101,6 +108,7 @@ func (a *API) Close() (err error) {
 	}
 }
 
+// handle manages the provided client connection, handling authentication and packet processing.
 func (a *API) handle(conn net.Conn) {
 	identifier := conn.RemoteAddr().String()
 	a.logger.Debug("accepted connection", "addr", identifier)
@@ -151,10 +159,7 @@ func (a *API) handle(conn net.Conn) {
 			}
 
 			if h, ok := a.handlers[pk.ID()]; ok {
-				if !h(pk) {
-					a.logger.Error("failed to handle packet", "addr", identifier, "pid", pk.ID())
-					return
-				}
+				h(c, pk)
 			} else {
 				a.logger.Error("received an unhandled packet", "addr", identifier, "pid", pk.ID())
 			}

@@ -6,7 +6,7 @@ require (
 	github.com/go-gl/mathgl v1.1.0
 	github.com/golang/snappy v0.0.4
 	github.com/quic-go/quic-go v0.45.1
-	github.com/sandertv/gophertunnel v1.38.0
+	github.com/sandertv/gophertunnel v1.39.0
 	github.com/scylladb/go-set v1.0.2
 )
 
@@ -21,13 +21,14 @@ require (
 	github.com/onsi/ginkgo/v2 v2.19.0 // indirect
 	github.com/sandertv/go-raknet v1.14.1 // indirect
 	go.uber.org/mock v0.4.0 // indirect
-	golang.org/x/crypto v0.24.0 // indirect
-	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8 // indirect
+	golang.org/x/crypto v0.25.0 // indirect
+	golang.org/x/exp v0.0.0-20240707233637-46b078467d37 // indirect
 	golang.org/x/image v0.18.0 // indirect
-	golang.org/x/mod v0.18.0 // indirect
-	golang.org/x/net v0.26.0 // indirect
+	golang.org/x/mod v0.19.0 // indirect
+	golang.org/x/net v0.27.0 // indirect
 	golang.org/x/oauth2 v0.21.0 // indirect
-	golang.org/x/sys v0.21.0 // indirect
+	golang.org/x/sync v0.7.0 // indirect
+	golang.org/x/sys v0.22.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
-	golang.org/x/tools v0.22.0 // indirect
+	golang.org/x/tools v0.23.0 // indirect
 )

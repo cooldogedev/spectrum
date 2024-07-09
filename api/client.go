@@ -11,6 +11,8 @@ import (
 	"github.com/cooldogedev/spectrum/protocol"
 )
 
+// Client represents a connection to the API service, managing packet reading and writing
+// over an underlying net.Conn.
 type Client struct {
 	conn net.Conn
 	pool packet.Pool
@@ -19,6 +21,8 @@ type Client struct {
 	reader *protocol.Reader
 }
 
+// NewClient creates a new Client instance using the provided net.Conn.
+// It is used for reading and writing packets to the underlying connection.
 func NewClient(conn net.Conn, pool packet.Pool) *Client {
 	return &Client{
 		conn: conn,
@@ -29,6 +33,7 @@ func NewClient(conn net.Conn, pool packet.Pool) *Client {
 	}
 }
 
+// ReadPacket reads the next available packet from the connection and decodes it.
 func (c *Client) ReadPacket() (pk packet.Packet, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -56,6 +61,7 @@ func (c *Client) ReadPacket() (pk packet.Packet, err error) {
 	return
 }
 
+// WritePacket encodes and writes the provided packet to the underlying connection.
 func (c *Client) WritePacket(pk packet.Packet) error {
 	buf := internal.BufferPool.Get().(*bytes.Buffer)
 	defer func() {
@@ -70,6 +76,7 @@ func (c *Client) WritePacket(pk packet.Packet) error {
 	return c.writer.Write(buf.Bytes())
 }
 
+// Close closes the underlying connection.
 func (c *Client) Close() error {
 	return c.conn.Close()
 }

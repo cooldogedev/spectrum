@@ -5,12 +5,15 @@ import (
 	"net"
 )
 
+// TCP implements the Transport interface to establish connections to servers using the TCP protocol.
 type TCP struct{}
 
+// NewTCP creates a new TCP transport instance.
 func NewTCP() *TCP {
 	return &TCP{}
 }
 
+// Dial ...
 func (t *TCP) Dial(addr string) (io.ReadWriteCloser, error) {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {

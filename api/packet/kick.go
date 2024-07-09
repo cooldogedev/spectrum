@@ -2,8 +2,11 @@ package packet
 
 import "bytes"
 
+// Kick is sent by the client to initiate the removal of a specific player from the proxy.
 type Kick struct {
-	Reason   string
+	// Reason is the reason displayed in the disconnection screen for the kick.
+	Reason string
+	// Username is the username of the player to be kicked.
 	Username string
 }
 

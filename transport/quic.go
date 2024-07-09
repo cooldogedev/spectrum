@@ -57,12 +57,17 @@ func (s *session) openStream() (quic.Stream, error) {
 	return stream, nil
 }
 
+// QUIC implements the Transport interface to establish connections to servers using the QUIC protocol.
+// It maintains a single connection per server, optimizing dialing times and reducing connection overhead.
+// By leveraging streams for individual server connections, it enhances overall performance and
+// resource utilization.
 type QUIC struct {
 	sessions map[string]*session
 	logger   *slog.Logger
 	mu       sync.RWMutex
 }
 
+// NewQUIC creates a new QUIC transport instance.
 func NewQUIC(logger *slog.Logger) *QUIC {
 	return &QUIC{
 		sessions: make(map[string]*session),
@@ -70,6 +75,7 @@ func NewQUIC(logger *slog.Logger) *QUIC {
 	}
 }
 
+// Dial ...
 func (q *QUIC) Dial(addr string) (io.ReadWriteCloser, error) {
 	if s := q.get(addr); s != nil {
 		stream, err := s.openStream()

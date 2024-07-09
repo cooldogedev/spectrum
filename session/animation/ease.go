@@ -11,8 +11,11 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
+// Ease represents an easing camera animation that moves the player's camera upwards in five steps,
+// each step moving 25 blocks and pausing for 300 milliseconds before the next movement.
+// After the animation concludes, it smoothly returns the camera downward to the player's character.
 type Ease struct {
-	CameraAnimation
+	cameraAnimation
 
 	Flicker bool
 	Colour  color.RGBA
@@ -22,6 +25,7 @@ type Ease struct {
 	Yaw      float32
 }
 
+// Play ...
 func (animation *Ease) Play(conn *minecraft.Conn, _ minecraft.GameData) {
 	animation.Sync(conn)
 	_ = conn.WritePacket(&packet.CameraInstruction{
@@ -67,6 +71,7 @@ func (animation *Ease) Play(conn *minecraft.Conn, _ minecraft.GameData) {
 	time.Sleep(time.Second * 3)
 }
 
+// Clear ....
 func (animation *Ease) Clear(conn *minecraft.Conn, serverGameData minecraft.GameData) {
 	go func() {
 		timing := animation.Timing
@@ -113,8 +118,6 @@ func (animation *Ease) Clear(conn *minecraft.Conn, serverGameData minecraft.Game
 		})
 
 		time.Sleep(time.Millisecond * 400)
-		_ = conn.WritePacket(&packet.CameraInstruction{
-			Clear: protocol.Option(true),
-		})
+		_ = conn.WritePacket(&packet.CameraInstruction{Clear: protocol.Option(true)})
 	}()
 }

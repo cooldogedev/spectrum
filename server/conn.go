@@ -27,6 +27,8 @@ const (
 	packetDecodeNotNeeded = 0x01
 )
 
+// Conn represents a connection to a server, managing packet reading and writing
+// over an underlying io.ReadWriteCloser.
 type Conn struct {
 	conn   io.ReadWriteCloser
 	reader *proto.Reader
@@ -56,6 +58,8 @@ type Conn struct {
 	closed    chan struct{}
 }
 
+// NewConn creates a new Conn instance using the provided io.ReadWriteCloser.
+// It is used for reading and writing packets to the underlying connection.
 func NewConn(conn io.ReadWriteCloser, addr net.Addr, token string, clientData login.ClientData, identityData login.IdentityData, pool packet.Pool) *Conn {
 	c := &Conn{
 		conn:       conn,
@@ -110,6 +114,8 @@ func NewConn(conn io.ReadWriteCloser, addr net.Addr, token string, clientData lo
 	return c
 }
 
+// ReadPacket reads the next available packet from the connection. If there are deferred packets, it will return
+// one of those first. This method should not be called concurrently from multiple goroutines.
 func (c *Conn) ReadPacket() (any, error) {
 	if len(c.deferredPackets) > 0 {
 		pk := c.deferredPackets[0]
@@ -120,6 +126,7 @@ func (c *Conn) ReadPacket() (any, error) {
 	return c.read(false)
 }
 
+// WritePacket encodes and writes the provided packet to the underlying connection.
 func (c *Conn) WritePacket(pk packet.Packet) error {
 	c.headerMu.Lock()
 	defer c.headerMu.Unlock()
@@ -138,18 +145,21 @@ func (c *Conn) WritePacket(pk packet.Packet) error {
 	return c.writer.Write(snappy.Encode(nil, buf.Bytes()))
 }
 
+// Connect initiates the connection sequence with a default timeout of 1 minute.
 func (c *Conn) Connect() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	return c.ConnectContext(ctx)
 }
 
+// ConnectTimeout initiates the connection sequence with the specified timeout duration.
 func (c *Conn) ConnectTimeout(duration time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
 	return c.ConnectContext(ctx)
 }
 
+// ConnectContext initiates the connection sequence using the provided context for cancellation.
 func (c *Conn) ConnectContext(ctx context.Context) error {
 	c.expect(packet2.IDConnectionResponse)
 	if err := c.sendConnectionRequest(); err != nil {
@@ -166,18 +176,21 @@ func (c *Conn) ConnectContext(ctx context.Context) error {
 	}
 }
 
+// Spawn initiates the spawning sequence with a default timeout of 1 minute.
 func (c *Conn) Spawn() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	return c.SpawnContext(ctx)
 }
 
+// SpawnTimeout initiates the spawning sequence with the specified timeout duration.
 func (c *Conn) SpawnTimeout(duration time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
 	return c.SpawnContext(ctx)
 }
 
+// SpawnContext initiates the spawning sequence using the provided context for cancellation.
 func (c *Conn) SpawnContext(ctx context.Context) error {
 	c.expect(packet.IDStartGame)
 	select {
@@ -190,10 +203,12 @@ func (c *Conn) SpawnContext(ctx context.Context) error {
 	}
 }
 
+// GameData returns the game data set for the connection by the StartGame packet.
 func (c *Conn) GameData() minecraft.GameData {
 	return c.gameData
 }
 
+// Close closes the underlying connection.
 func (c *Conn) Close() (err error) {
 	select {
 	case <-c.closed:
@@ -205,6 +220,10 @@ func (c *Conn) Close() (err error) {
 	}
 }
 
+// read reads a packet from the connection, handling decompression and decoding as necessary.
+// Packets are prefixed with a special byte (packetDecodeNeeded or packetDecodeNotNeeded) indicating
+// the decoding necessity. If decode is false and the packet does not require decoding,
+// it returns the raw decompressed payload.
 func (c *Conn) read(decode bool) (pk any, err error) {
 	select {
 	case <-c.closed:
@@ -244,14 +263,17 @@ func (c *Conn) read(decode bool) (pk any, err error) {
 	}
 }
 
+// deferPacket defers a packet to be returned later in ReadPacket().
 func (c *Conn) deferPacket(pk packet.Packet) {
 	c.deferredPackets = append(c.deferredPackets, pk)
 }
 
+// expect stores packet IDs that will be read and handled before finalizing the spawning sequence.
 func (c *Conn) expect(ids ...uint32) {
 	c.expectedIds.Store(ids)
 }
 
+// sendConnectionRequest initiates the connection sequence by sending a ConnectionRequest packet to the underlying connection.
 func (c *Conn) sendConnectionRequest() error {
 	clientData, err := json.Marshal(c.clientData)
 	if err != nil {
@@ -271,6 +293,7 @@ func (c *Conn) sendConnectionRequest() error {
 	return nil
 }
 
+// handlePacket handles an expected packet that was received before the spawning sequence finalization.
 func (c *Conn) handlePacket(pk packet.Packet) error {
 	switch pk := pk.(type) {
 	case *packet2.ConnectionResponse:
@@ -286,6 +309,8 @@ func (c *Conn) handlePacket(pk packet.Packet) error {
 	}
 }
 
+// handleConnectionResponse handles the ConnectionResponse, which is the final packet in the connection sequence
+// it signals that we may proceed with the spawning sequence.
 func (c *Conn) handleConnectionResponse(pk *packet2.ConnectionResponse) error {
 	c.runtimeID = pk.RuntimeID
 	c.uniqueID = pk.UniqueID
@@ -293,6 +318,7 @@ func (c *Conn) handleConnectionResponse(pk *packet2.ConnectionResponse) error {
 	return nil
 }
 
+// handleStartGame handles the StartGame packet.
 func (c *Conn) handleStartGame(pk *packet.StartGame) error {
 	c.expect(packet.IDChunkRadiusUpdated)
 	c.gameData = minecraft.GameData{
@@ -338,6 +364,8 @@ func (c *Conn) handleStartGame(pk *packet.StartGame) error {
 	return nil
 }
 
+// handleChunkRadiusUpdated handles the first ChunkRadiusUpdated packet, which updates the initial chunk
+// radius of the connection.
 func (c *Conn) handleChunkRadiusUpdated(pk *packet.ChunkRadiusUpdated) error {
 	c.expect(packet.IDPlayStatus)
 	c.deferPacket(pk)
@@ -346,6 +374,8 @@ func (c *Conn) handleChunkRadiusUpdated(pk *packet.ChunkRadiusUpdated) error {
 	return nil
 }
 
+// handlePlayStatus handles the first PlayStatus packet. It is the final packet in the spawning sequence,
+// it responds to the server with a packet.SetLocalPlayerAsInitialised to finalize the spawning sequence and spawn the player.
 func (c *Conn) handlePlayStatus(pk *packet.PlayStatus) error {
 	c.deferPacket(pk)
 	_ = c.WritePacket(&packet.SetLocalPlayerAsInitialised{EntityRuntimeID: c.runtimeID})
