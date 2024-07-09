@@ -11,8 +11,10 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
+// Smooth represents a camera animation that smoothly moves the player's camera upwards towards the sky
+// and returns it downward to the player's character when the animation concludes.
 type Smooth struct {
-	CameraAnimation
+	cameraAnimation
 
 	Colour color.RGBA
 	Timing protocol.CameraFadeTimeData
@@ -21,6 +23,7 @@ type Smooth struct {
 	Yaw      float32
 }
 
+// Play ...
 func (animation *Smooth) Play(conn *minecraft.Conn, _ minecraft.GameData) {
 	animation.Sync(conn)
 	_ = conn.WritePacket(&packet.CameraInstruction{
@@ -50,6 +53,7 @@ func (animation *Smooth) Play(conn *minecraft.Conn, _ minecraft.GameData) {
 	time.Sleep(time.Second * 3)
 }
 
+// Clear ...
 func (animation *Smooth) Clear(conn *minecraft.Conn, serverGameData minecraft.GameData) {
 	go func() {
 		timing := animation.Timing
@@ -96,8 +100,6 @@ func (animation *Smooth) Clear(conn *minecraft.Conn, serverGameData minecraft.Ga
 		})
 
 		time.Sleep(time.Millisecond * 400)
-		_ = conn.WritePacket(&packet.CameraInstruction{
-			Clear: protocol.Option(true),
-		})
+		_ = conn.WritePacket(&packet.CameraInstruction{Clear: protocol.Option(true)})
 	}()
 }

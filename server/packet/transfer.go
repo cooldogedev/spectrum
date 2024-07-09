@@ -2,7 +2,9 @@ package packet
 
 import "github.com/sandertv/gophertunnel/minecraft/protocol"
 
+// Transfer is sent by the server to initiate a server transfer.
 type Transfer struct {
+	// Addr is the address of the new server.
 	Addr string
 }
 

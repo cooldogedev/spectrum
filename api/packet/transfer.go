@@ -2,8 +2,11 @@ package packet
 
 import "bytes"
 
+// Transfer is sent by the client to initiate the transfer of a specific player to another server.
 type Transfer struct {
-	Addr     string
+	// Addr is the address of the new server.
+	Addr string
+	// Username is the username of the player to be transferred.
 	Username string
 }
 

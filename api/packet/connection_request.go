@@ -2,7 +2,10 @@ package packet
 
 import "bytes"
 
+// ConnectionRequest is sent by clients to connect and authenticate with the service using a token.
+// The service responds to this request with a ConnectionResponse.
 type ConnectionRequest struct {
+	// Token is the client's token which is used for authorization.
 	Token string
 }
 

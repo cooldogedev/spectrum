@@ -16,6 +16,8 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
+// Session represents a player session within the proxy, managing client and server interactions,
+// including transfers, fallbacks, and tracking various session states.
 type Session struct {
 	clientConn *minecraft.Conn
 
@@ -43,6 +45,7 @@ type Session struct {
 	once   sync.Once
 }
 
+// NewSession creates a new Session instance using the provided minecraft.Conn.
 func NewSession(clientConn *minecraft.Conn, logger *slog.Logger, registry *Registry, discovery server.Discovery, opts util.Opts, transport transport.Transport) *Session {
 	s := &Session{
 		clientConn: clientConn,
@@ -64,6 +67,7 @@ func NewSession(clientConn *minecraft.Conn, logger *slog.Logger, registry *Regis
 	return s
 }
 
+// Login initiates the login process, including server discovery, connection, and player spawning.
 func (s *Session) Login() (err error) {
 	defer s.serverMu.Unlock()
 
@@ -105,6 +109,8 @@ func (s *Session) Login() (err error) {
 	return
 }
 
+// Transfer moves the session to a different server. It ensures that only one transfer occurs at a time,
+// returning an error if another transfer is in progress.
 func (s *Session) Transfer(addr string) (err error) {
 	if !s.transferring.CompareAndSwap(false, true) {
 		return errors.New("already transferring")
@@ -195,49 +201,60 @@ func (s *Session) Transfer(addr string) (err error) {
 	return nil
 }
 
+// Animation returns the animation set to be played during server transfers.
 func (s *Session) Animation() animation.Animation {
 	return s.animation
 }
 
+// SetAnimation sets the animation to be played during server transfers.
 func (s *Session) SetAnimation(animation animation.Animation) {
 	s.animation = animation
 }
 
+// Opts returns the current session options.
 func (s *Session) Opts() util.Opts {
 	return s.opts
 }
 
+// SetOpts updates the session options.
 func (s *Session) SetOpts(opts util.Opts) {
 	s.opts = opts
 }
 
+// Processor returns the current processor.
 func (s *Session) Processor() Processor {
 	return s.processor
 }
 
+// SetProcessor sets a new processor for the session.
 func (s *Session) SetProcessor(processor Processor) {
 	s.processor = processor
 }
 
+// Latency returns the total latency experienced by the session, combining client and server latencies.
 func (s *Session) Latency() int64 {
 	return s.clientConn.Latency().Milliseconds() + s.serverLatency
 }
 
+// Client returns the client connection.
 func (s *Session) Client() *minecraft.Conn {
 	return s.clientConn
 }
 
+// Server returns the current server connection.
 func (s *Session) Server() *server.Conn {
 	s.serverMu.RLock()
 	defer s.serverMu.RUnlock()
 	return s.serverConn
 }
 
+// Disconnect sends a packet.Disconnect to the client and closes the session.
 func (s *Session) Disconnect(message string) {
 	_ = s.clientConn.WritePacket(&packet.Disconnect{Message: message})
 	_ = s.Close()
 }
 
+// Close closes the session, including the server and client connections.
 func (s *Session) Close() (err error) {
 	s.once.Do(func() {
 		close(s.ch)
@@ -260,6 +277,7 @@ func (s *Session) Close() (err error) {
 	return
 }
 
+// dial establishes a connection to the specified server address and returns a new server.Conn instance.
 func (s *Session) dial(addr string) (*server.Conn, error) {
 	conn, err := s.transport.Dial(addr)
 	if err != nil {
@@ -268,6 +286,7 @@ func (s *Session) dial(addr string) (*server.Conn, error) {
 	return server.NewConn(conn, s.clientConn.RemoteAddr(), s.opts.Token, s.clientConn.ClientData(), s.clientConn.IdentityData(), packet.NewServerPool()), nil
 }
 
+// fallback attempts to transfer the session to a fallback server provided by the discovery.
 func (s *Session) fallback() (err error) {
 	addr, err := s.discovery.DiscoverFallback(s.clientConn)
 	if err != nil {
@@ -281,6 +300,8 @@ func (s *Session) fallback() (err error) {
 	return
 }
 
+// sendMetadata toggles the player's immobility during transfers to prevent position mismatches
+// between the client and the server.
 func (s *Session) sendMetadata(noAI bool) {
 	metadata := protocol.NewEntityMetadata()
 	if noAI {

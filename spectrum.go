@@ -10,6 +10,8 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft"
 )
 
+// Spectrum represents a proxy server managing server discovery,
+// network transport, and connections through an underlying minecraft.Listener.
 type Spectrum struct {
 	discovery server.Discovery
 	transport tr.Transport
@@ -21,6 +23,9 @@ type Spectrum struct {
 	opts   util.Opts
 }
 
+// NewSpectrum creates a new Spectrum instance using the provided server.Discovery.
+// It initializes opts with default options from util.DefaultOpts() if opts is nil,
+// and defaults to TCP transport if transport is nil transport.TCP.
 func NewSpectrum(discovery server.Discovery, logger *slog.Logger, opts *util.Opts, transport tr.Transport) *Spectrum {
 	if opts == nil {
 		opts = util.DefaultOpts()
@@ -40,18 +45,21 @@ func NewSpectrum(discovery server.Discovery, logger *slog.Logger, opts *util.Opt
 	}
 }
 
+// Listen sets up a minecraft.Listener for incoming connections based on the provided minecraft.ListenConfig.
+// The listener is then used by the Accept() method for accepting incoming connections.
 func (s *Spectrum) Listen(config minecraft.ListenConfig) (err error) {
 	listener, err := config.Listen("raknet", s.opts.Addr)
 	if err != nil {
 		s.logger.Error("failed to listen", "err", err)
 		return err
 	}
-
 	s.listener = listener
 	s.logger.Info("started listening", "addr", listener.Addr())
 	return nil
 }
 
+// Accept accepts an incoming minecraft.Conn and creates a new session for it.
+// This method should be called in a loop to continuously accept new connections.
 func (s *Spectrum) Accept() (*session.Session, error) {
 	c, err := s.listener.Accept()
 	if err != nil {
@@ -73,22 +81,27 @@ func (s *Spectrum) Accept() (*session.Session, error) {
 	return newSession, nil
 }
 
+// Discovery returns the server discovery instance.
 func (s *Spectrum) Discovery() server.Discovery {
 	return s.discovery
 }
 
+// Opts returns the configuration options.
 func (s *Spectrum) Opts() util.Opts {
 	return s.opts
 }
 
+// Registry returns the session registry instance.
 func (s *Spectrum) Registry() *session.Registry {
 	return s.registry
 }
 
+// Transport returns the transport instance.
 func (s *Spectrum) Transport() tr.Transport {
 	return s.transport
 }
 
+// Close closes the listener and stops listening for incoming connections.
 func (s *Spectrum) Close() error {
 	return s.listener.Close()
 }
