@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -40,7 +41,9 @@ type Session struct {
 	loggedIn     atomic.Bool
 	transferring atomic.Bool
 
-	ch     chan struct{}
+	ctx        context.Context
+	cancelFunc context.CancelFunc
+
 	closed atomic.Bool
 	once   sync.Once
 }
@@ -60,8 +63,6 @@ func NewSession(clientConn *minecraft.Conn, logger *slog.Logger, registry *Regis
 		animation: &animation.Dimension{},
 		processor: NopProcessor{},
 		tracker:   newTracker(),
-
-		ch: make(chan struct{}),
 	}
 	s.serverMu.Lock()
 	return s
@@ -70,6 +71,10 @@ func NewSession(clientConn *minecraft.Conn, logger *slog.Logger, registry *Regis
 // Login initiates the login process, including server discovery, connection, and player spawning.
 func (s *Session) Login() (err error) {
 	defer s.serverMu.Unlock()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	s.ctx = ctx
+	s.cancelFunc = cancel
 
 	go handleIncoming(s)
 	go handleOutgoing(s)
@@ -257,10 +262,12 @@ func (s *Session) Disconnect(message string) {
 // Close closes the session, including the server and client connections.
 func (s *Session) Close() (err error) {
 	s.once.Do(func() {
-		close(s.ch)
 		s.closed.Store(true)
-		s.processor.ProcessDisconnection(NewContext())
+		if s.cancelFunc != nil {
+			s.cancelFunc()
+		}
 
+		s.processor.ProcessDisconnection(NewContext())
 		_ = s.clientConn.Close()
 		if s.serverConn != nil {
 			_ = s.serverConn.Close()

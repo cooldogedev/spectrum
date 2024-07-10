@@ -19,7 +19,7 @@ func handleIncoming(s *Session) {
 	defer s.Close()
 	for {
 		select {
-		case <-s.ch:
+		case <-s.ctx.Done():
 			return
 		default:
 			if !s.loggedIn.Load() || s.transferring.Load() {
@@ -85,7 +85,7 @@ func handleOutgoing(s *Session) {
 	var deferredPackets []packet.Packet
 	for {
 		select {
-		case <-s.ch:
+		case <-s.ctx.Done():
 			return
 		default:
 			pk, err := s.clientConn.ReadPacket()
@@ -120,7 +120,7 @@ func handleLatency(s *Session, interval int64) {
 	}()
 	for {
 		select {
-		case <-s.ch:
+		case <-s.ctx.Done():
 			return
 		case <-ticker.C:
 			if !s.loggedIn.Load() || s.transferring.Load() {
