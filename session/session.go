@@ -38,7 +38,7 @@ type Session struct {
 	processor Processor
 	tracker   *tracker
 
-	loggedIn     atomic.Bool
+	loggedIn     bool
 	transferring atomic.Bool
 
 	ctx        context.Context
@@ -108,7 +108,7 @@ func (s *Session) Login() (err error) {
 
 	identityData := s.clientConn.IdentityData()
 	s.sendMetadata(true)
-	s.loggedIn.Store(true)
+	s.loggedIn = true
 	s.registry.AddSession(identityData.XUID, s)
 	s.logger.Info("logged in session", "username", identityData.DisplayName)
 	return
@@ -275,7 +275,7 @@ func (s *Session) Close() (err error) {
 
 		identity := s.clientConn.IdentityData()
 		s.registry.RemoveSession(identity.XUID)
-		if s.loggedIn.Load() {
+		if s.loggedIn {
 			s.logger.Info("closed session", "username", identity.DisplayName)
 		} else {
 			s.logger.Debug("closed unlogged session", "username", identity.DisplayName)

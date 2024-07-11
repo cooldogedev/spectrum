@@ -22,11 +22,11 @@ func handleIncoming(s *Session) {
 		case <-s.ctx.Done():
 			return
 		default:
-			if !s.loggedIn.Load() || s.transferring.Load() {
+			server := s.Server()
+			if !s.loggedIn {
 				continue
 			}
 
-			server := s.Server()
 			pk, err := server.ReadPacket()
 			if err != nil {
 				if server != s.Server() {
@@ -96,7 +96,7 @@ func handleOutgoing(s *Session) {
 				return
 			}
 
-			if !s.loggedIn.Load() {
+			if !s.loggedIn {
 				deferredPackets = append(deferredPackets, pk)
 				continue
 			}
@@ -123,7 +123,7 @@ func handleLatency(s *Session, interval int64) {
 		case <-s.ctx.Done():
 			return
 		case <-ticker.C:
-			if !s.loggedIn.Load() || s.transferring.Load() {
+			if !s.loggedIn {
 				continue
 			}
 
