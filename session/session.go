@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -37,10 +38,12 @@ type Session struct {
 	processor Processor
 	tracker   *tracker
 
-	loggedIn     atomic.Bool
+	loggedIn     bool
 	transferring atomic.Bool
 
-	ch     chan struct{}
+	ctx        context.Context
+	cancelFunc context.CancelFunc
+
 	closed atomic.Bool
 	once   sync.Once
 }
@@ -60,8 +63,6 @@ func NewSession(clientConn *minecraft.Conn, logger *slog.Logger, registry *Regis
 		animation: &animation.Dimension{},
 		processor: NopProcessor{},
 		tracker:   newTracker(),
-
-		ch: make(chan struct{}),
 	}
 	s.serverMu.Lock()
 	return s
@@ -70,6 +71,10 @@ func NewSession(clientConn *minecraft.Conn, logger *slog.Logger, registry *Regis
 // Login initiates the login process, including server discovery, connection, and player spawning.
 func (s *Session) Login() (err error) {
 	defer s.serverMu.Unlock()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	s.ctx = ctx
+	s.cancelFunc = cancel
 
 	go handleIncoming(s)
 	go handleOutgoing(s)
@@ -103,7 +108,7 @@ func (s *Session) Login() (err error) {
 
 	identityData := s.clientConn.IdentityData()
 	s.sendMetadata(true)
-	s.loggedIn.Store(true)
+	s.loggedIn = true
 	s.registry.AddSession(identityData.XUID, s)
 	s.logger.Info("logged in session", "username", identityData.DisplayName)
 	return
@@ -257,10 +262,12 @@ func (s *Session) Disconnect(message string) {
 // Close closes the session, including the server and client connections.
 func (s *Session) Close() (err error) {
 	s.once.Do(func() {
-		close(s.ch)
 		s.closed.Store(true)
-		s.processor.ProcessDisconnection(NewContext())
+		if s.cancelFunc != nil {
+			s.cancelFunc()
+		}
 
+		s.processor.ProcessDisconnection(NewContext())
 		_ = s.clientConn.Close()
 		if s.serverConn != nil {
 			_ = s.serverConn.Close()
@@ -268,7 +275,7 @@ func (s *Session) Close() (err error) {
 
 		identity := s.clientConn.IdentityData()
 		s.registry.RemoveSession(identity.XUID)
-		if s.loggedIn.Load() {
+		if s.loggedIn {
 			s.logger.Info("closed session", "username", identity.DisplayName)
 		} else {
 			s.logger.Debug("closed unlogged session", "username", identity.DisplayName)
