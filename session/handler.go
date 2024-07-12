@@ -138,10 +138,6 @@ func handleLatency(s *Session, interval int64) {
 	}
 }
 
-func isErrorLoggable(err error) bool {
-	return !errors.Is(err, net.ErrClosed) && !strings.Contains(err.Error(), errClosedStream) && !strings.Contains(err.Error(), errClosedNetworkConn)
-}
-
 func sendOutgoing(s *Session, pk packet.Packet) {
 	ctx := NewContext()
 	if s.transferring.Load() {
@@ -156,4 +152,8 @@ func sendOutgoing(s *Session, pk packet.Packet) {
 	if err := s.Server().WritePacket(pk); err != nil && isErrorLoggable(err) {
 		s.logger.Error("failed to write packet to server", "err", err)
 	}
+}
+
+func isErrorLoggable(err error) bool {
+	return !errors.Is(err, net.ErrClosed) && !strings.Contains(err.Error(), errClosedStream) && !strings.Contains(err.Error(), errClosedNetworkConn)
 }
