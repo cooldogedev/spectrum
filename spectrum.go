@@ -1,6 +1,8 @@
 package spectrum
 
 import (
+	"context"
+	"errors"
 	"log/slog"
 
 	"github.com/cooldogedev/spectrum/server"
@@ -73,7 +75,9 @@ func (s *Spectrum) Accept() (*session.Session, error) {
 		go func() {
 			if err := newSession.Login(); err != nil {
 				newSession.Disconnect(err.Error())
-				s.logger.Error("failed to login session", "err", err)
+				if !errors.Is(err, context.Canceled) {
+					s.logger.Error("failed to login session", "err", err)
+				}
 			}
 		}()
 	}

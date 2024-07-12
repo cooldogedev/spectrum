@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/cooldogedev/spectrum/server"
 	"github.com/cooldogedev/spectrum/session/animation"
@@ -64,17 +65,30 @@ func NewSession(clientConn *minecraft.Conn, logger *slog.Logger, registry *Regis
 		processor: NopProcessor{},
 		tracker:   newTracker(),
 	}
+	s.ctx, s.cancelFunc = context.WithCancel(context.Background())
 	s.serverMu.Lock()
 	return s
 }
 
-// Login initiates the login process, including server discovery, connection, and player spawning.
+// Login initiates the login sequence with a default timeout of 1 minute.
 func (s *Session) Login() (err error) {
-	defer s.serverMu.Unlock()
+	ctx, cancel := context.WithTimeout(s.ctx, time.Minute)
+	defer cancel()
+	return s.LoginContext(ctx)
+}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	s.ctx = ctx
-	s.cancelFunc = cancel
+// LoginTimeout initiates the login sequence with the specified timeout duration.
+func (s *Session) LoginTimeout(duration time.Duration) (err error) {
+	ctx, cancel := context.WithTimeout(s.ctx, duration)
+	defer cancel()
+	return s.LoginContext(ctx)
+}
+
+// LoginContext initiates the login sequence for the session, including server discovery,
+// establishing a connection, and spawning the player in the game. The process is performed
+// using the provided context for cancellation.
+func (s *Session) LoginContext(ctx context.Context) (err error) {
+	defer s.serverMu.Unlock()
 
 	go handleIncoming(s)
 	go handleOutgoing(s)
@@ -87,45 +101,65 @@ func (s *Session) Login() (err error) {
 
 	serverConn, err := s.dial(serverAddr)
 	if err != nil {
-		return fmt.Errorf("dialer failed: %v", err)
+		s.logger.Debug("dialer failed", "err", err)
+		return err
 	}
 
 	s.serverAddr = serverAddr
 	s.serverConn = serverConn
-	if err := serverConn.Connect(); err != nil {
-		return fmt.Errorf("connection sequence failed: %v", err)
+	if err := serverConn.ConnectContext(ctx); err != nil {
+		s.logger.Debug("connection sequence failed", "err", err)
+		return err
 	}
 
-	if err := serverConn.Spawn(); err != nil {
-		return fmt.Errorf("spawn sequence failed: %v", err)
+	if err := serverConn.SpawnContext(ctx); err != nil {
+		s.logger.Debug("spawn sequence failed", "err", err)
+		return err
 	}
 
 	gameData := serverConn.GameData()
 	s.processor.ProcessStartGame(NewContext(), &gameData)
 	if err := s.clientConn.StartGame(gameData); err != nil {
-		return fmt.Errorf("startgame sequence failed: %v", err)
+		s.logger.Debug("startgame sequence failed", "err", err)
+		return err
 	}
 
 	identityData := s.clientConn.IdentityData()
-	s.sendMetadata(true)
 	s.loggedIn = true
 	s.registry.AddSession(identityData.XUID, s)
 	s.logger.Info("logged in session", "username", identityData.DisplayName)
 	return
 }
 
-// Transfer moves the session to a different server. It ensures that only one transfer occurs at a time,
-// returning an error if another transfer is in progress.
+// Transfer initiates a transfer to a different server using the specified address.
+// It sets a default timeout of 1 minute for the transfer operation.
 func (s *Session) Transfer(addr string) (err error) {
+	ctx, cancel := context.WithTimeout(s.ctx, time.Minute)
+	defer cancel()
+	return s.TransferContext(addr, ctx)
+}
+
+// TransferTimeout initiates a transfer to a different server using the specified address
+// and a custom timeout duration for the transfer operation.
+func (s *Session) TransferTimeout(addr string, duration time.Duration) (err error) {
+	ctx, cancel := context.WithTimeout(s.ctx, duration)
+	defer cancel()
+	return s.TransferContext(addr, ctx)
+}
+
+// TransferContext initiates a transfer to a different server using the specified address. It ensures that only one transfer
+// occurs at a time, returning an error if another transfer is already in progress.
+// The process is performed using the provided context for cancellation.
+func (s *Session) TransferContext(addr string, ctx context.Context) (err error) {
 	if !s.transferring.CompareAndSwap(false, true) {
 		return errors.New("already transferring")
 	}
 
 	defer s.transferring.Store(false)
 
-	ctx := NewContext()
-	s.processor.ProcessPreTransfer(ctx, &s.serverAddr, &addr)
-	if ctx.Cancelled() {
+	processorCtx := NewContext()
+	s.processor.ProcessPreTransfer(processorCtx, &s.serverAddr, &addr)
+	if processorCtx.Cancelled() {
 		return errors.New("processor failed")
 	}
 
@@ -136,6 +170,7 @@ func (s *Session) Transfer(addr string) (err error) {
 	s.serverMu.Lock()
 	defer func() {
 		if err != nil {
+			s.sendMetadata(false)
 			s.serverMu.Unlock()
 		}
 	}()
@@ -146,15 +181,13 @@ func (s *Session) Transfer(addr string) (err error) {
 	}
 
 	s.sendMetadata(true)
-	if err := conn.Connect(); err != nil {
+	if err := conn.ConnectContext(ctx); err != nil {
 		_ = conn.Close()
-		s.sendMetadata(false)
 		return fmt.Errorf("connection sequence failed: %v", err)
 	}
 
-	if err := conn.Spawn(); err != nil {
+	if err := conn.SpawnContext(ctx); err != nil {
 		_ = conn.Close()
-		s.sendMetadata(false)
 		return fmt.Errorf("spawn sequence failed: %v", err)
 	}
 
