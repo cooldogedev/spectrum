@@ -107,5 +107,8 @@ func (s *Spectrum) Transport() tr.Transport {
 
 // Close closes the listener and stops listening for incoming connections.
 func (s *Spectrum) Close() error {
+	for _, activeSession := range s.registry.GetSessions() {
+		_ = activeSession.Close()
+	}
 	return s.listener.Close()
 }
