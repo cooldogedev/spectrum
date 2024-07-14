@@ -213,6 +213,7 @@ func (s *Session) TransferContext(addr string, ctx context.Context) (err error) 
 		}
 	}
 
+	_ = s.clientConn.Flush()
 	s.tracker.clearEffects(s)
 	s.tracker.clearEntities(s)
 	s.tracker.clearBossBars(s)
@@ -236,7 +237,6 @@ func (s *Session) TransferContext(addr string, ctx context.Context) (err error) 
 	s.serverAddr = addr
 	s.serverConn = conn
 	s.serverMu.Unlock()
-
 	s.processor.ProcessPostTransfer(NewContext(), &s.serverAddr, &addr)
 	s.logger.Debug("transferred session", "username", identityData.DisplayName, "addr", addr)
 	return nil
