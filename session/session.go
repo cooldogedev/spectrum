@@ -3,7 +3,6 @@ package session
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"sync"
 	"sync/atomic"
@@ -94,37 +93,37 @@ func (s *Session) LoginContext(ctx context.Context) (err error) {
 	go handleClient(s)
 	go handleLatency(s, s.opts.LatencyInterval)
 
+	identityData := s.clientConn.IdentityData()
 	serverAddr, err := s.discovery.Discover(s.clientConn)
 	if err != nil {
-		return fmt.Errorf("discovery failed: %v", err)
+		s.logger.Debug("discovery failed", "username", identityData.DisplayName, "err", err)
+		return err
 	}
 
 	serverConn, err := s.dial(serverAddr)
 	if err != nil {
-		s.logger.Debug("dialer failed", "err", err)
+		s.logger.Debug("dialer failed", "username", identityData.DisplayName, "err", err)
 		return err
 	}
 
 	s.serverAddr = serverAddr
 	s.serverConn = serverConn
 	if err := serverConn.ConnectContext(ctx); err != nil {
-		s.logger.Debug("connection sequence failed", "err", err)
+		s.logger.Debug("connection sequence failed", "username", identityData.DisplayName, "err", err)
 		return err
 	}
 
 	if err := serverConn.SpawnContext(ctx); err != nil {
-		s.logger.Debug("spawn sequence failed", "err", err)
+		s.logger.Debug("spawn sequence failed", "username", identityData.DisplayName, "err", err)
 		return err
 	}
 
 	gameData := serverConn.GameData()
 	s.processor.ProcessStartGame(NewContext(), &gameData)
 	if err := s.clientConn.StartGame(gameData); err != nil {
-		s.logger.Debug("startgame sequence failed", "err", err)
+		s.logger.Debug("startgame sequence failed", "username", identityData.DisplayName, "err", err)
 		return err
 	}
-
-	identityData := s.clientConn.IdentityData()
 	s.loggedIn = true
 	s.registry.AddSession(identityData.XUID, s)
 	s.logger.Info("logged in session", "username", identityData.DisplayName)
@@ -175,20 +174,24 @@ func (s *Session) TransferContext(addr string, ctx context.Context) (err error) 
 		}
 	}()
 
+	identityData := s.clientConn.IdentityData()
 	conn, err := s.dial(addr)
 	if err != nil {
-		return fmt.Errorf("dialer failed: %v", err)
+		s.logger.Debug("dialer failed", "username", identityData.DisplayName, "err", err)
+		return err
 	}
 
 	s.sendMetadata(true)
 	if err := conn.ConnectContext(ctx); err != nil {
 		_ = conn.Close()
-		return fmt.Errorf("connection sequence failed: %v", err)
+		s.logger.Debug("connection sequence failed", "username", identityData.DisplayName, "err", err)
+		return err
 	}
 
 	if err := conn.SpawnContext(ctx); err != nil {
 		_ = conn.Close()
-		return fmt.Errorf("spawn sequence failed: %v", err)
+		s.logger.Debug("spawn sequence failed", "username", identityData.DisplayName, "err", err)
+		return err
 	}
 
 	_ = s.serverConn.Close()
@@ -210,6 +213,7 @@ func (s *Session) TransferContext(addr string, ctx context.Context) (err error) 
 		}
 	}
 
+	_ = s.clientConn.Flush()
 	s.tracker.clearEffects(s)
 	s.tracker.clearEntities(s)
 	s.tracker.clearBossBars(s)
@@ -233,9 +237,8 @@ func (s *Session) TransferContext(addr string, ctx context.Context) (err error) 
 	s.serverAddr = addr
 	s.serverConn = conn
 	s.serverMu.Unlock()
-
 	s.processor.ProcessPostTransfer(NewContext(), &s.serverAddr, &addr)
-	s.logger.Debug("transferred session", "username", s.clientConn.IdentityData().DisplayName, "addr", addr)
+	s.logger.Debug("transferred session", "username", identityData.DisplayName, "addr", addr)
 	return nil
 }
 
