@@ -15,7 +15,8 @@ const (
 	errClosedStream      = "closed stream"
 )
 
-func handleIncoming(s *Session) {
+// handleServer continuously reads packets from the server and forwards them to the client.
+func handleServer(s *Session) {
 	defer s.Close()
 	for {
 		select {
@@ -80,7 +81,8 @@ func handleIncoming(s *Session) {
 	}
 }
 
-func handleOutgoing(s *Session) {
+// handleClient continuously reads packets from the client and forwards them to the server.
+func handleClient(s *Session) {
 	defer s.Close()
 	var deferredPackets []packet.Packet
 	for {
@@ -103,15 +105,18 @@ func handleOutgoing(s *Session) {
 
 			if len(deferredPackets) > 0 {
 				for _, deferredPacket := range deferredPackets {
-					sendOutgoing(s, deferredPacket)
+					handleClientPacket(s, deferredPacket)
 				}
 				deferredPackets = nil
 			}
-			sendOutgoing(s, pk)
+			handleClientPacket(s, pk)
 		}
 	}
 }
 
+// handleLatency periodically sends the client's current ping and timestamp to the server for latency reporting.
+// Note: The client's latency is derived from half of RakNet's round-trip time (RTT).
+// To calculate the total latency, we multiply this value by 2.
 func handleLatency(s *Session, interval int64) {
 	ticker := time.NewTicker(time.Millisecond * time.Duration(interval))
 	defer func() {
@@ -128,7 +133,7 @@ func handleLatency(s *Session, interval int64) {
 			}
 
 			err := s.Server().WritePacket(&packet2.Latency{
-				Latency:   s.clientConn.Latency().Milliseconds(),
+				Latency:   s.clientConn.Latency().Milliseconds() * 2,
 				Timestamp: time.Now().UnixMilli(),
 			})
 			if err != nil && !s.closed.Load() {
@@ -138,7 +143,8 @@ func handleLatency(s *Session, interval int64) {
 	}
 }
 
-func sendOutgoing(s *Session, pk packet.Packet) {
+// handleClientPacket processes and forwards the provided packet from the client to the server.
+func handleClientPacket(s *Session, pk packet.Packet) {
 	ctx := NewContext()
 	if s.transferring.Load() {
 		ctx.Cancel()

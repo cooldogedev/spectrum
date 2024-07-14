@@ -90,8 +90,8 @@ func (s *Session) LoginTimeout(duration time.Duration) (err error) {
 func (s *Session) LoginContext(ctx context.Context) (err error) {
 	defer s.serverMu.Unlock()
 
-	go handleIncoming(s)
-	go handleOutgoing(s)
+	go handleServer(s)
+	go handleClient(s)
 	go handleLatency(s, s.opts.LatencyInterval)
 
 	serverAddr, err := s.discovery.Discover(s.clientConn)
@@ -270,8 +270,10 @@ func (s *Session) SetProcessor(processor Processor) {
 }
 
 // Latency returns the total latency experienced by the session, combining client and server latencies.
+// Note: The client's latency is derived from half of RakNet's round-trip time (RTT).
+// To calculate the total latency, we multiply this value by 2.
 func (s *Session) Latency() int64 {
-	return s.clientConn.Latency().Milliseconds() + s.serverLatency
+	return (s.clientConn.Latency().Milliseconds() * 2) + s.serverLatency
 }
 
 // Client returns the client connection.
