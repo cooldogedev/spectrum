@@ -328,7 +328,7 @@ func (s *Session) dial(addr string) (*server.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return server.NewConn(conn, s.clientConn.RemoteAddr(), s.opts.Token, s.clientConn.ClientData(), s.clientConn.IdentityData(), packet.NewServerPool()), nil
+	return server.NewConn(conn, s.clientConn.RemoteAddr(), s.logger, s.opts.Token, s.clientConn.ClientData(), s.clientConn.IdentityData(), packet.NewServerPool()), nil
 }
 
 // fallback attempts to transfer the session to a fallback server provided by the discovery.
