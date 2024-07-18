@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -33,6 +34,7 @@ type Conn struct {
 	conn   io.ReadWriteCloser
 	reader *proto.Reader
 	writer *proto.Writer
+	logger *slog.Logger
 
 	runtimeID uint64
 	uniqueID  int64
@@ -60,11 +62,12 @@ type Conn struct {
 
 // NewConn creates a new Conn instance using the provided io.ReadWriteCloser.
 // It is used for reading and writing packets to the underlying connection.
-func NewConn(conn io.ReadWriteCloser, addr net.Addr, token string, clientData login.ClientData, identityData login.IdentityData, pool packet.Pool) *Conn {
+func NewConn(conn io.ReadWriteCloser, addr net.Addr, logger *slog.Logger, token string, clientData login.ClientData, identityData login.IdentityData, pool packet.Pool) *Conn {
 	c := &Conn{
 		conn:       conn,
 		reader: proto.NewReader(conn),
 		writer: proto.NewWriter(conn),
+		logger: logger,
 
 		addr:  addr,
 		token: token,
@@ -290,6 +293,7 @@ func (c *Conn) sendConnectionRequest() error {
 		ClientData:   clientData,
 		IdentityData: identityData,
 	})
+	c.logger.Debug("sent connection_request, expecting connection_response", "username", c.identityData.DisplayName)
 	return nil
 }
 
@@ -315,6 +319,7 @@ func (c *Conn) handleConnectionResponse(pk *packet2.ConnectionResponse) error {
 	c.runtimeID = pk.RuntimeID
 	c.uniqueID = pk.UniqueID
 	close(c.connected)
+	c.logger.Debug("received connection_response, expecting start_game", "username", c.identityData.DisplayName)
 	return nil
 }
 
@@ -361,6 +366,7 @@ func (c *Conn) handleStartGame(pk *packet.StartGame) error {
 		}
 	}
 	_ = c.WritePacket(&packet.RequestChunkRadius{ChunkRadius: 16})
+	c.logger.Debug("received start_game, expecting chunk_radius_updated", "username", c.identityData.DisplayName)
 	return nil
 }
 
@@ -370,7 +376,7 @@ func (c *Conn) handleChunkRadiusUpdated(pk *packet.ChunkRadiusUpdated) error {
 	c.expect(packet.IDPlayStatus)
 	c.deferPacket(pk)
 	c.gameData.ChunkRadius = pk.ChunkRadius
-	_ = c.WritePacket(&packet.RequestChunkRadius{ChunkRadius: 16})
+	c.logger.Debug("received chunk_radius_updated, expecting play_status", "username", c.identityData.DisplayName)
 	return nil
 }
 
@@ -380,5 +386,6 @@ func (c *Conn) handlePlayStatus(pk *packet.PlayStatus) error {
 	c.deferPacket(pk)
 	_ = c.WritePacket(&packet.SetLocalPlayerAsInitialised{EntityRuntimeID: c.runtimeID})
 	close(c.spawned)
+	c.logger.Debug("received play_status, finalizing spawn sequence", "username", c.identityData.DisplayName)
 	return nil
 }
