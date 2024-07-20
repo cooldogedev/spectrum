@@ -16,6 +16,7 @@ import (
 	"github.com/cooldogedev/spectrum/internal"
 	proto "github.com/cooldogedev/spectrum/protocol"
 	packet2 "github.com/cooldogedev/spectrum/server/packet"
+	"github.com/golang/snappy"
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/login"
@@ -30,9 +31,7 @@ const (
 // Conn represents a connection to a server, managing packet reading and writing
 // over an underlying io.ReadWriteCloser.
 type Conn struct {
-	conn       io.ReadWriteCloser
-	compressor packet.Compression
-
+	conn   io.ReadWriteCloser
 	reader *proto.Reader
 	writer *proto.Writer
 	logger *slog.Logger
@@ -66,8 +65,6 @@ type Conn struct {
 func NewConn(conn io.ReadWriteCloser, addr net.Addr, logger *slog.Logger, token string, clientData login.ClientData, identityData login.IdentityData, pool packet.Pool) *Conn {
 	c := &Conn{
 		conn:       conn,
-		compressor: packet.FlateCompression,
-
 		reader: proto.NewReader(conn),
 		writer: proto.NewWriter(conn),
 		logger: logger,
@@ -147,13 +144,8 @@ func (c *Conn) WritePacket(pk packet.Packet) error {
 	if err := c.header.Write(buf); err != nil {
 		return err
 	}
-
 	pk.Marshal(protocol.NewWriter(buf, c.shieldID))
-	data, err := c.compressor.Compress(buf.Bytes())
-	if err != nil {
-		return err
-	}
-	return c.writer.Write(data)
+	return c.writer.Write(snappy.Encode(nil, buf.Bytes()))
 }
 
 // Connect initiates the connection sequence with a default timeout of 1 minute.
@@ -249,7 +241,7 @@ func (c *Conn) read(decode bool) (pk any, err error) {
 			return nil, fmt.Errorf("unknown decode byte marker %v", payload[0])
 		}
 
-		decompressed, err := c.compressor.Decompress(payload[1:])
+		decompressed, err := snappy.Decode(nil, payload[1:])
 		if err != nil {
 			return nil, err
 		}
