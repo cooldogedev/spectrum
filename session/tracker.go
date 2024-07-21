@@ -1,7 +1,6 @@
 package session
 
 import (
-	"fmt"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 	"github.com/scylladb/go-set/b16set"
@@ -81,7 +80,6 @@ func (t *tracker) clearEffects(s *Session) {
 			EffectType:      i,
 			Operation:       packet.MobEffectRemove,
 		})
-		fmt.Println(fmt.Sprintf("Effect %d has been cleared up", i))
 		return true
 	})
 	t.effects.Clear()
