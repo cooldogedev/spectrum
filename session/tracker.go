@@ -80,7 +80,6 @@ func (t *tracker) clearEffects(s *Session) {
 			EntityRuntimeID: s.clientConn.GameData().EntityRuntimeID,
 			EffectType:      i,
 			Operation:       packet.MobEffectRemove,
-			Tick:            0,
 		})
 		fmt.Println(fmt.Sprintf("Effect %d has been cleared up", i))
 		return true
