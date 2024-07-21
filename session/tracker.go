@@ -42,7 +42,7 @@ func (t *tracker) handlePacket(pk packet.Packet) {
 	case *packet.MobEffect:
 		if pk.Operation == packet.MobEffectAdd {
 			t.effects.Add(pk.EffectType)
-		} else {
+		} else if pk.Operation == packet.MobEffectRemove {
 			t.effects.Remove(pk.EffectType)
 		}
 	case *packet.PlayerList:
