@@ -1,6 +1,7 @@
 package session
 
 import (
+	"fmt"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 	"github.com/scylladb/go-set/b16set"
@@ -42,7 +43,7 @@ func (t *tracker) handlePacket(pk packet.Packet) {
 	case *packet.MobEffect:
 		if pk.Operation == packet.MobEffectAdd {
 			t.effects.Add(pk.EffectType)
-		} else {
+		} else if pk.Operation == packet.MobEffectRemove {
 			t.effects.Remove(pk.EffectType)
 		}
 	case *packet.PlayerList:
@@ -79,7 +80,9 @@ func (t *tracker) clearEffects(s *Session) {
 			EntityRuntimeID: s.clientConn.GameData().EntityRuntimeID,
 			EffectType:      i,
 			Operation:       packet.MobEffectRemove,
+			Tick:            0,
 		})
+		fmt.Println(fmt.Sprintf("Effect %d has been cleared up", i))
 		return true
 	})
 	t.effects.Clear()
