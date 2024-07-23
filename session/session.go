@@ -205,7 +205,7 @@ func (s *Session) TransferContext(addr string, ctx context.Context) (err error) 
 	for x := chunkX - 4; x <= chunkX+4; x++ {
 		for z := chunkZ - 4; z <= chunkZ+4; z++ {
 			_ = s.clientConn.WritePacket(&packet.LevelChunk{
-				Dimension:     packet.DimensionNether,
+				Dimension:     serverGameData.Dimension,
 				Position:      protocol.ChunkPos{x, z},
 				SubChunkCount: 1,
 				RawPayload:    chunk,
