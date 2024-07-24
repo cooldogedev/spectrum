@@ -64,7 +64,7 @@ type Conn struct {
 // It is used for reading and writing packets to the underlying connection.
 func NewConn(conn io.ReadWriteCloser, addr net.Addr, logger *slog.Logger, token string, clientData login.ClientData, identityData login.IdentityData, pool packet.Pool) *Conn {
 	c := &Conn{
-		conn:       conn,
+		conn:   conn,
 		reader: proto.NewReader(conn),
 		writer: proto.NewWriter(conn),
 		logger: logger,
@@ -204,6 +204,14 @@ func (c *Conn) SpawnContext(ctx context.Context) error {
 	case <-c.spawned:
 		return nil
 	}
+}
+
+// Conn returns the underlying connection.
+// Direct access to the underlying connection through this method is
+// strongly discouraged due to the potential for unpredictable behavior.
+// Use this method only when absolutely necessary.
+func (c *Conn) Conn() io.ReadWriteCloser {
+	return c.conn
 }
 
 // GameData returns the game data set for the connection by the StartGame packet.
