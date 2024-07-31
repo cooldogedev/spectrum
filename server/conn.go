@@ -93,6 +93,7 @@ func NewConn(conn io.ReadWriteCloser, addr net.Addr, logger *slog.Logger, token 
 				pk, err := c.read(true)
 				if err != nil {
 					_ = c.Close()
+					c.logger.Error("failed to read packet", "username", identityData.DisplayName, "err", err)
 					return
 				}
 
@@ -102,6 +103,7 @@ func NewConn(conn io.ReadWriteCloser, addr net.Addr, logger *slog.Logger, token 
 					if p.ID() == id {
 						deferrable = false
 						if err := c.handlePacket(p); err != nil {
+							c.logger.Error("failed to handle packet", "username", identityData.DisplayName, "err", err)
 							_ = c.Close()
 							return
 						}
@@ -295,12 +297,16 @@ func (c *Conn) sendConnectionRequest() error {
 	if err != nil {
 		return err
 	}
-	_ = c.WritePacket(&packet2.ConnectionRequest{
+
+	err = c.WritePacket(&packet2.ConnectionRequest{
 		Addr:         c.addr.String(),
 		Token:        c.token,
 		ClientData:   clientData,
 		IdentityData: identityData,
 	})
+	if err != nil {
+		return err
+	}
 	c.logger.Debug("sent connection_request, expecting connection_response", "username", c.identityData.DisplayName)
 	return nil
 }
@@ -373,7 +379,10 @@ func (c *Conn) handleStartGame(pk *packet.StartGame) error {
 			c.shieldID = int32(item.RuntimeID)
 		}
 	}
-	_ = c.WritePacket(&packet.RequestChunkRadius{ChunkRadius: 16})
+
+	if err := c.WritePacket(&packet.RequestChunkRadius{ChunkRadius: 16}); err != nil {
+		return err
+	}
 	c.logger.Debug("received start_game, expecting chunk_radius_updated", "username", c.identityData.DisplayName)
 	return nil
 }
@@ -392,7 +401,9 @@ func (c *Conn) handleChunkRadiusUpdated(pk *packet.ChunkRadiusUpdated) error {
 // it responds to the server with a packet.SetLocalPlayerAsInitialised to finalize the spawning sequence and spawn the player.
 func (c *Conn) handlePlayStatus(pk *packet.PlayStatus) error {
 	c.deferPacket(pk)
-	_ = c.WritePacket(&packet.SetLocalPlayerAsInitialised{EntityRuntimeID: c.runtimeID})
+	if err := c.WritePacket(&packet.SetLocalPlayerAsInitialised{EntityRuntimeID: c.runtimeID}); err != nil {
+		return err
+	}
 	close(c.spawned)
 	c.logger.Debug("received play_status, finalizing spawn sequence", "username", c.identityData.DisplayName)
 	return nil
