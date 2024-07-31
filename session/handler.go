@@ -65,17 +65,14 @@ func handleServer(s *Session) {
 				s.tracker.handlePacket(pk)
 				if err := s.clientConn.WritePacket(pk); err != nil && isErrorLoggable(err) {
 					s.logger.Error("failed to write packet to client", "err", err)
-				} else {
-					continue
+					return
 				}
 				return
 			case []byte:
 				if _, err := s.clientConn.Write(pk); err != nil && isErrorLoggable(err) {
 					s.logger.Error("failed to write raw packet to client", "err", err)
-				} else {
-					continue
+					return
 				}
-				return
 			}
 		}
 	}
