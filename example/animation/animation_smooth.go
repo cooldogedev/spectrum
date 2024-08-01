@@ -16,7 +16,7 @@ import (
 )
 
 type smoothProcessor struct {
-	*session.NopProcessor
+	session.NopProcessor
 	consumer func(mgl32.Vec3, float32)
 }
 
