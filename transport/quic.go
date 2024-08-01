@@ -95,7 +95,7 @@ func NewQUIC(logger *slog.Logger) *QUIC {
 }
 
 // Dial ...
-func (q *QUIC) Dial(addr string) (io.ReadWriteCloser, error) {
+func (q *QUIC) Dial(ctx context.Context, addr string) (io.ReadWriteCloser, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -109,9 +109,6 @@ func (q *QUIC) Dial(addr string) (io.ReadWriteCloser, error) {
 			return nil, err
 		}
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
 
 	conn, err := quic.DialAddr(
 		ctx,
@@ -132,7 +129,6 @@ func (q *QUIC) Dial(addr string) (io.ReadWriteCloser, error) {
 		},
 	)
 	if err != nil {
-		q.logger.Debug("failed to dial address", "addr", addr, "err", err)
 		return nil, err
 	}
 

@@ -100,7 +100,7 @@ func (s *Session) LoginContext(ctx context.Context) (err error) {
 		return err
 	}
 
-	serverConn, err := s.dial(serverAddr)
+	serverConn, err := s.dial(ctx, serverAddr)
 	if err != nil {
 		s.logger.Debug("dialer failed", "username", identityData.DisplayName, "err", err)
 		return err
@@ -135,7 +135,7 @@ func (s *Session) LoginContext(ctx context.Context) (err error) {
 func (s *Session) Transfer(addr string) (err error) {
 	ctx, cancel := context.WithTimeout(s.ctx, time.Minute)
 	defer cancel()
-	return s.TransferContext(addr, ctx)
+	return s.TransferContext(ctx, addr)
 }
 
 // TransferTimeout initiates a transfer to a different server using the specified address
@@ -143,13 +143,13 @@ func (s *Session) Transfer(addr string) (err error) {
 func (s *Session) TransferTimeout(addr string, duration time.Duration) (err error) {
 	ctx, cancel := context.WithTimeout(s.ctx, duration)
 	defer cancel()
-	return s.TransferContext(addr, ctx)
+	return s.TransferContext(ctx, addr)
 }
 
 // TransferContext initiates a transfer to a different server using the specified address. It ensures that only one transfer
 // occurs at a time, returning an error if another transfer is already in progress.
 // The process is performed using the provided context for cancellation.
-func (s *Session) TransferContext(addr string, ctx context.Context) (err error) {
+func (s *Session) TransferContext(ctx context.Context, addr string) (err error) {
 	if !s.transferring.CompareAndSwap(false, true) {
 		return errors.New("already transferring")
 	}
@@ -175,7 +175,7 @@ func (s *Session) TransferContext(addr string, ctx context.Context) (err error) 
 	}()
 
 	identityData := s.clientConn.IdentityData()
-	conn, err := s.dial(addr)
+	conn, err := s.dial(ctx, addr)
 	if err != nil {
 		s.logger.Debug("dialer failed", "username", identityData.DisplayName, "err", err)
 		return err
@@ -322,9 +322,10 @@ func (s *Session) Close() (err error) {
 	return
 }
 
-// dial establishes a connection to the specified server address and returns a new server.Conn instance.
-func (s *Session) dial(addr string) (*server.Conn, error) {
-	conn, err := s.transport.Dial(addr)
+// dial dials the specified server address and returns a new server.Conn instance.
+// The provided context is used to manage timeouts and cancellations during the dialing process.
+func (s *Session) dial(ctx context.Context, addr string) (*server.Conn, error) {
+	conn, err := s.transport.Dial(ctx, addr)
 	if err != nil {
 		return nil, err
 	}

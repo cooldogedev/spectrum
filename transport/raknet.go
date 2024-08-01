@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"context"
 	"io"
 
 	"github.com/sandertv/gophertunnel/minecraft"
@@ -15,8 +16,8 @@ func NewRakNet() *RakNet {
 }
 
 // Dial ...
-func (r *RakNet) Dial(addr string) (io.ReadWriteCloser, error) {
-	conn, err := minecraft.Dial("raknet", addr)
+func (r *RakNet) Dial(ctx context.Context, addr string) (io.ReadWriteCloser, error) {
+	conn, err := minecraft.DialContext(ctx, "raknet", addr)
 	if err != nil {
 		return nil, err
 	}

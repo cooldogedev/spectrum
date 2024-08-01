@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"context"
 	"io"
 	"net"
 )
@@ -14,7 +15,7 @@ func NewTCP() *TCP {
 }
 
 // Dial ...
-func (t *TCP) Dial(addr string) (io.ReadWriteCloser, error) {
+func (t *TCP) Dial(_ context.Context, addr string) (io.ReadWriteCloser, error) {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		return nil, err

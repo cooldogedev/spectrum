@@ -1,10 +1,14 @@
 package transport
 
-import "io"
+import (
+	"context"
+	"io"
+)
 
 // Transport defines an interface for establishing server connections.
 type Transport interface {
-	// Dial connects to the specified address and returns an io.ReadWriteCloser.
-	// It returns an error if the connection cannot be established.
-	Dial(addr string) (io.ReadWriteCloser, error)
+	// Dial initiates a connection to the specified address and returns an
+	// io.ReadWriteCloser. The provided context is used for managing
+	// timeouts and cancellations.
+	Dial(ctx context.Context, addr string) (io.ReadWriteCloser, error)
 }
