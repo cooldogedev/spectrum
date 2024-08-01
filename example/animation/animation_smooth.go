@@ -6,6 +6,7 @@ import (
 
 	"github.com/cooldogedev/spectrum"
 	"github.com/cooldogedev/spectrum/server"
+	"github.com/cooldogedev/spectrum/session"
 	"github.com/cooldogedev/spectrum/session/animation"
 	"github.com/cooldogedev/spectrum/util"
 	"github.com/go-gl/mathgl/mgl32"
@@ -15,19 +16,14 @@ import (
 )
 
 type smoothProcessor struct {
+	*session.NopProcessor
 	consumer func(mgl32.Vec3, float32)
 }
 
-func (p *smoothProcessor) ProcessServer(packet.Packet) bool { return true }
-func (p *smoothProcessor) ProcessPreTransfer(string) bool   { return true }
-func (p *smoothProcessor) ProcessPostTransfer(string) bool  { return true }
-func (p *smoothProcessor) ProcessDisconnection() bool       { return true }
-
-func (p *smoothProcessor) ProcessClient(pk packet.Packet) bool {
+func (p *smoothProcessor) ProcessClient(_ *session.Context, pk packet.Packet) {
 	if pk, ok := pk.(*packet.PlayerAuthInput); ok {
 		p.consumer(pk.Position.Add(mgl32.Vec3{0, 1, 0}), pk.HeadYaw)
 	}
-	return true
 }
 
 func main() {
