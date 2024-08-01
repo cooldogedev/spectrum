@@ -30,14 +30,14 @@ Spectrum introduces Discovery, a method for server determination when players jo
 The `Processor` interface in Spectrum handles incoming and outgoing packets within sessions, enabling custom filtering and manipulation. This functionality supports implementing anti-cheat measures and other security features. Downstream servers are responsible for prefixing packets to indicate decoding necessity, as per Spectrum protocol specifications.
 
 ## Why Spectrum?
-1. **Protocol Innovation**: Utilizes TCP and QUIC for enhanced reliability and performance, unlike traditional proxies relying on RakNet and standard Minecraft protocol.
+- **Protocol Innovation**: Utilizes TCP and QUIC for enhanced reliability and performance, unlike traditional proxies relying on RakNet and standard Minecraft protocol.
 
-2. **Efficient Packet Handling**: Maintains high throughput by bypassing unnecessary packet decoding, optimizing data transmission and reducing latency.
+- **Efficient Packet Handling**: Maintains high throughput by bypassing unnecessary packet decoding, optimizing data transmission and reducing latency.
 
-3. **Customizability**: Provides extensive customization options, including defining transfer transitions and custom behaviors, for unique gameplay experiences.
+- **Customizability**: Provides extensive customization options, including defining transfer transitions and custom behaviors, for unique gameplay experiences.
 
-4. **Lightweight and Fast**: Built for high performance with a lightweight architecture, capable of handling various connection loads efficiently.
+- **Lightweight and Fast**: Built for high performance with a lightweight architecture, capable of handling various connection loads efficiently.
 
-5. **Stateless**: Simplifies scalability with a stateless design, enhancing flexibility and efficiency in server management by not keeping track of registered servers within the proxy. Transfer between servers is as easy as sending Spectrum's transfer packet to the player from downstream servers.
+- **Stateless**: Simplifies scalability with a stateless design, enhancing flexibility and efficiency in server management by not keeping track of registered servers within the proxy. Transfer between servers is as easy as sending Spectrum's transfer packet to the player from downstream servers.
 
-6. **Deterministic**: Takes a unique approach by sidestepping entity translations altogether, relying solely on deterministic entity identifiers provided by the downstream servers.
+- **Deterministic**: Takes a unique approach by sidestepping entity translations altogether, relying solely on deterministic entity identifiers provided by the downstream servers.
