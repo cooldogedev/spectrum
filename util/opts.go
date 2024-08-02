@@ -9,6 +9,8 @@ type Opts struct {
 	// LatencyInterval is the interval at which the latency of the connection is updated in milliseconds.
 	// Lower intervals provide more accurate latency but use more bandwidth.
 	LatencyInterval int64 `yaml:"latency_interval"`
+	// ShutdownMessage is the message displayed to clients when Spectrum shuts down.
+	ShutdownMessage string `yaml:"shutdown_message"`
 	// Token is the authentication token that Spectrum uses to authenticate with servers.
 	Token string `yaml:"token"`
 }
@@ -19,5 +21,6 @@ func DefaultOpts() *Opts {
 		Addr:            ":19132",
 		AutoLogin:       true,
 		LatencyInterval: 3000,
+		ShutdownMessage: "Spectrum closed.",
 	}
 }
