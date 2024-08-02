@@ -21,17 +21,16 @@ type session struct {
 	timer   *time.Timer
 }
 
-func (s *session) openStream() (quic.Stream, error) {
+func (s *session) openStream(ctx context.Context) (quic.Stream, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case <-s.conn.Context().Done():
 		return nil, net.ErrClosed
 	default:
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-		defer cancel()
-
 		stream, err := s.conn.OpenStreamSync(ctx)
 		if err != nil {
 			_ = s.conn.CloseWithError(0, "failed to open stream")
@@ -100,7 +99,7 @@ func (q *QUIC) Dial(ctx context.Context, addr string) (io.ReadWriteCloser, error
 	defer q.mu.Unlock()
 
 	if s, ok := q.sessions[addr]; ok {
-		stream, err := s.openStream()
+		stream, err := s.openStream(ctx)
 		if err == nil {
 			return stream, nil
 		}
@@ -146,5 +145,5 @@ func (q *QUIC) Dial(ctx context.Context, addr string) (io.ReadWriteCloser, error
 			q.logger.Debug("closed connection", "addr", addr)
 		}
 	}()
-	return s.openStream()
+	return s.openStream(ctx)
 }
