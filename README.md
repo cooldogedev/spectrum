@@ -19,7 +19,9 @@ Spectrum's protocol uses TCP and QUIC instead of RakNet and the standard Minecra
 
 ### API
 
-Spectrum offers an external TCP service for communication between downstream servers and the proxy. This versatile service supports tasks like player transfers and kicks, using packets for efficient data exchange. For guidance, see this [example](example/api.go). Official implementations also include an API client for easy integration.
+Spectrum provides an external TCP service for communication between downstream servers and the proxy through packets. This service supports tasks such as player transfers and kicks and is designed to be extensible, allowing you to register your own packets and handlers.
+
+For a practical example, see the [example API implementation](example/api.go). Official implementations include an API client for easy integration. If you’re using Go, you can use the [Dial](api/dial.go) function from the API package to dial an API service.
 
 ### Discovery
 
