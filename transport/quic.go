@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"log/slog"
-	"net"
 	"sync"
 	"time"
 
@@ -14,82 +13,21 @@ import (
 	"github.com/quic-go/quic-go/qlog"
 )
 
-type session struct {
-	conn    quic.Connection
-	counter int32
-	mu      sync.Mutex
-	timer   *time.Timer
-}
-
-func (s *session) openStream(ctx context.Context) (quic.Stream, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-s.conn.Context().Done():
-		return nil, net.ErrClosed
-	default:
-		stream, err := s.conn.OpenStreamSync(ctx)
-		if err != nil {
-			_ = s.conn.CloseWithError(0, "failed to open stream")
-			return nil, err
-		}
-
-		if s.timer != nil {
-			s.timer.Stop()
-			s.timer = nil
-		}
-
-		s.counter++
-		go func() {
-			<-stream.Context().Done()
-			s.closeStream()
-		}()
-		return stream, nil
-	}
-}
-
-func (s *session) closeStream() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.counter--
-	if s.counter > 0 {
-		return
-	}
-
-	if s.timer != nil {
-		s.timer.Reset(time.Second * 10)
-		return
-	}
-	s.timer = time.AfterFunc(time.Second*10, func() {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-
-		s.timer = nil
-		if s.counter <= 0 {
-			_ = s.conn.CloseWithError(0, "no open streams")
-		}
-	})
-}
-
 // QUIC implements the Transport interface to establish connections to servers using the QUIC protocol.
 // It maintains a single connection per server, optimizing dialing times and reducing connection overhead.
 // By leveraging streams for individual server connections, it enhances overall performance and
 // resource utilization.
 type QUIC struct {
-	sessions map[string]*session
-	logger   *slog.Logger
-	mu       sync.Mutex
+	connections map[string]quic.Connection
+	logger      *slog.Logger
+	mu          sync.Mutex
 }
 
 // NewQUIC creates a new QUIC transport instance.
 func NewQUIC(logger *slog.Logger) *QUIC {
 	return &QUIC{
-		sessions: make(map[string]*session),
-		logger:   logger,
+		connections: make(map[string]quic.Connection),
+		logger:      logger,
 	}
 }
 
@@ -98,15 +36,13 @@ func (q *QUIC) Dial(ctx context.Context, addr string) (io.ReadWriteCloser, error
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	if s, ok := q.sessions[addr]; ok {
-		stream, err := s.openStream(ctx)
-		if err == nil {
-			return stream, nil
-		}
-
-		if !errors.Is(err, net.ErrClosed) {
+	if conn, ok := q.connections[addr]; ok {
+		stream, err := conn.OpenStreamSync(ctx)
+		if err != nil {
+			_ = conn.CloseWithError(0, "failed to open stream")
 			return nil, err
 		}
+		return stream, nil
 	}
 
 	conn, err := quic.DialAddr(
@@ -119,10 +55,8 @@ func (q *QUIC) Dial(ctx context.Context, addr string) (io.ReadWriteCloser, error
 		&quic.Config{
 			MaxIdleTimeout:                 time.Second * 10,
 			InitialStreamReceiveWindow:     1024 * 1024 * 10,
-			MaxStreamReceiveWindow:         1024 * 1024 * 10,
 			InitialConnectionReceiveWindow: 1024 * 1024 * 10,
-			MaxConnectionReceiveWindow:     1024 * 1024 * 10,
-			KeepAlivePeriod:                time.Second * 5,
+			KeepAlivePeriod:                0,
 			InitialPacketSize:              1350,
 			Tracer:                         qlog.DefaultConnectionTracer,
 		},
@@ -131,13 +65,12 @@ func (q *QUIC) Dial(ctx context.Context, addr string) (io.ReadWriteCloser, error
 		return nil, err
 	}
 
-	s := &session{conn: conn}
-	q.sessions[addr] = s
+	q.connections[addr] = conn
 	q.logger.Debug("established connection", "addr", addr)
 	go func() {
 		<-conn.Context().Done()
 		q.mu.Lock()
-		delete(q.sessions, addr)
+		delete(q.connections, addr)
 		q.mu.Unlock()
 		if err := conn.Context().Err(); err != nil && !errors.Is(err, context.Canceled) {
 			q.logger.Error("closed connection", "addr", addr, "err", err)
@@ -145,5 +78,5 @@ func (q *QUIC) Dial(ctx context.Context, addr string) (io.ReadWriteCloser, error
 			q.logger.Debug("closed connection", "addr", addr)
 		}
 	}()
-	return s.openStream(ctx)
+	return conn.OpenStreamSync(ctx)
 }
