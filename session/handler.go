@@ -30,7 +30,7 @@ func handleServer(s *Session) {
 
 			pk, err := server.ReadPacket()
 			if err != nil {
-				if server != s.Server() {
+				if s.transferring.Load() || server != s.Server() {
 					continue
 				}
 
