@@ -95,6 +95,11 @@ func (s *Spectrum) Opts() util.Opts {
 	return s.opts
 }
 
+// Listener returns the listener instance.
+func (s *Spectrum) Listener() *minecraft.Listener {
+	return s.listener
+}
+
 // Registry returns the session registry instance.
 func (s *Spectrum) Registry() *session.Registry {
 	return s.registry
