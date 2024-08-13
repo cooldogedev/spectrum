@@ -1,12 +1,16 @@
 package session
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"time"
 
+	"github.com/cooldogedev/spectrum/internal"
 	packet2 "github.com/cooldogedev/spectrum/server/packet"
+	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
@@ -84,13 +88,16 @@ func handleServer(s *Session) {
 // handleClient continuously reads packets from the client and forwards them to the server.
 func handleClient(s *Session) {
 	defer s.Close()
-	var deferredPackets []packet.Packet
+
+	header := &packet.Header{}
+	pool := packet.NewClientPool()
+	var deferredPackets [][]byte
 	for {
 		select {
 		case <-s.ctx.Done():
 			return
 		default:
-			pk, err := s.clientConn.ReadPacket()
+			payload, err := s.clientConn.ReadBytes()
 			if err != nil {
 				if isErrorLoggable(err) {
 					s.logger.Error("failed to read packet from client", "err", err)
@@ -99,17 +106,22 @@ func handleClient(s *Session) {
 			}
 
 			if !s.loggedIn {
-				deferredPackets = append(deferredPackets, pk)
+				deferredPackets = append(deferredPackets, payload)
 				continue
 			}
 
 			if len(deferredPackets) > 0 {
 				for _, deferredPacket := range deferredPackets {
-					handleClientPacket(s, deferredPacket)
+					if err := handleClientPacket(s, header, pool, deferredPacket); err != nil && isErrorLoggable(err) {
+						s.logger.Error("failed to write packet to server", "err", err)
+					}
 				}
 				deferredPackets = nil
 			}
-			handleClientPacket(s, pk)
+
+			if err := handleClientPacket(s, header, pool, payload); err != nil && isErrorLoggable(err) {
+				s.logger.Error("failed to write packet to server", "err", err)
+			}
 		}
 	}
 }
@@ -144,20 +156,42 @@ func handleLatency(s *Session, interval int64) {
 }
 
 // handleClientPacket processes and forwards the provided packet from the client to the server.
-func handleClientPacket(s *Session, pk packet.Packet) {
+func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, payload []byte) (err error) {
 	ctx := NewContext()
 	if s.transferring.Load() {
 		ctx.Cancel()
 	}
 
-	s.processor.ProcessClient(ctx, pk)
-	if ctx.Cancelled() {
+	buf := bytes.NewBuffer(payload)
+	if err := header.Read(buf); err != nil {
+		return errors.New("failed to decode header")
+	}
+
+	if !internal.ClientPacketExists(header.PacketID) {
+		if !ctx.Cancelled() {
+			return s.Server().Write(payload)
+		}
 		return
 	}
 
-	if err := s.Server().WritePacket(pk); err != nil && isErrorLoggable(err) {
-		s.logger.Error("failed to write packet to server", "err", err)
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic while decoding packet: %v", r)
+		}
+	}()
+
+	factory, ok := pool[header.PacketID]
+	if !ok {
+		return fmt.Errorf("unknown packet %d", header.PacketID)
 	}
+
+	pk := factory()
+	pk.Marshal(protocol.NewReader(buf, s.shieldID, true))
+	s.processor.ProcessClient(ctx, pk)
+	if !ctx.Cancelled() {
+		return s.Server().WritePacket(pk)
+	}
+	return
 }
 
 func isErrorLoggable(err error) bool {

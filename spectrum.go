@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log/slog"
 
+	"github.com/brentp/intintmap"
+	"github.com/cooldogedev/spectrum/internal"
 	"github.com/cooldogedev/spectrum/server"
 	"github.com/cooldogedev/spectrum/session"
 	tr "github.com/cooldogedev/spectrum/transport"
@@ -31,6 +33,13 @@ type Spectrum struct {
 func NewSpectrum(discovery server.Discovery, logger *slog.Logger, opts *util.Opts, transport tr.Transport) *Spectrum {
 	if opts == nil {
 		opts = util.DefaultOpts()
+	}
+
+	if len(opts.ClientDecode) > 0 {
+		internal.ClientPacketMap = intintmap.New(len(opts.ClientDecode), 0.999)
+		for _, id := range opts.ClientDecode {
+			internal.ClientPacketMap.Put(int64(id), 1)
+		}
 	}
 
 	if transport == nil {

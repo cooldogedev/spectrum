@@ -150,6 +150,11 @@ func (c *Conn) WritePacket(pk packet.Packet) error {
 	return c.writer.Write(snappy.Encode(nil, buf.Bytes()))
 }
 
+// Write writes provided byte slice to the underlying connection.
+func (c *Conn) Write(p []byte) error {
+	return c.writer.Write(snappy.Encode(nil, p))
+}
+
 // Connect initiates the connection sequence with a default timeout of 1 minute.
 func (c *Conn) Connect() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -219,6 +224,11 @@ func (c *Conn) Conn() io.ReadWriteCloser {
 // GameData returns the game data set for the connection by the StartGame packet.
 func (c *Conn) GameData() minecraft.GameData {
 	return c.gameData
+}
+
+// ShieldID returns the shield id set for the connection by the StartGame packet.
+func (c *Conn) ShieldID() int32 {
+	return c.shieldID
 }
 
 // Close closes the underlying connection.

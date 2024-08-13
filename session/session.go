@@ -21,6 +21,7 @@ import (
 // including transfers, fallbacks, and tracking various session states.
 type Session struct {
 	clientConn *minecraft.Conn
+	shieldID   int32
 
 	serverAddr    string
 	serverConn    *server.Conn
@@ -124,6 +125,7 @@ func (s *Session) LoginContext(ctx context.Context) (err error) {
 		s.logger.Debug("startgame sequence failed", "username", identityData.DisplayName, "err", err)
 		return err
 	}
+	s.shieldID = serverConn.ShieldID()
 	s.loggedIn = true
 	s.registry.AddSession(identityData.XUID, s)
 	s.logger.Info("logged in session", "username", identityData.DisplayName)
