@@ -31,8 +31,12 @@ type Processor interface {
 	ProcessStartGame(ctx *Context, data *minecraft.GameData)
 	// ProcessServer is called before forwarding the server-sent packets to the client.
 	ProcessServer(ctx *Context, pk packet.Packet)
+	// ProcessServerEncoded is called before forwarding the server-sent packets to the client.
+	ProcessServerEncoded(ctx *Context, pk *[]byte)
 	// ProcessClient is called before forwarding the client-sent packets to the server.
 	ProcessClient(ctx *Context, pk packet.Packet)
+	// ProcessClientEncoded is called before forwarding the client-sent packets to the server.
+	ProcessClientEncoded(ctx *Context, pk *[]byte)
 	// ProcessPreTransfer is called before transferring the player to a different server.
 	ProcessPreTransfer(ctx *Context, origin *string, target *string)
 	// ProcessPostTransfer is called after transferring the player to a different server.
@@ -49,7 +53,9 @@ var _ Processor = NopProcessor{}
 
 func (NopProcessor) ProcessStartGame(_ *Context, _ *minecraft.GameData)   {}
 func (NopProcessor) ProcessServer(_ *Context, _ packet.Packet)            {}
+func (NopProcessor) ProcessServerEncoded(_ *Context, _ *[]byte)           {}
 func (NopProcessor) ProcessClient(_ *Context, _ packet.Packet)            {}
+func (NopProcessor) ProcessClientEncoded(_ *Context, _ *[]byte)           {}
 func (NopProcessor) ProcessPreTransfer(_ *Context, _ *string, _ *string)  {}
 func (NopProcessor) ProcessPostTransfer(_ *Context, _ *string, _ *string) {}
 func (NopProcessor) ProcessDisconnection(_ *Context)                      {}

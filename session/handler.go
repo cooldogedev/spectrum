@@ -74,6 +74,12 @@ func handleServer(s *Session) {
 					return
 				}
 			case []byte:
+				ctx := NewContext()
+				s.processor.ProcessServerEncoded(ctx, &pk)
+				if ctx.Cancelled() {
+					continue
+				}
+
 				if _, err := s.clientConn.Write(pk); err != nil {
 					if isErrorLoggable(err) {
 						s.logger.Error("failed to write raw packet to client", "err", err)
@@ -168,6 +174,7 @@ func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, pay
 	}
 
 	if !internal.ClientPacketExists(header.PacketID) {
+		s.processor.ProcessClientEncoded(ctx, &payload)
 		if !ctx.Cancelled() {
 			return s.Server().Write(payload)
 		}
