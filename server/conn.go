@@ -52,7 +52,7 @@ type Conn struct {
 	headerMu sync.Mutex
 
 	expectedIds     atomic.Value
-	deferredPackets []packet.Packet
+	deferredPackets []any
 	pool            packet.Pool
 
 	connected chan struct{}
@@ -90,19 +90,24 @@ func NewConn(conn io.ReadWriteCloser, addr net.Addr, logger *slog.Logger, token 
 			case <-c.spawned:
 				return
 			default:
-				pk, err := c.read(true)
+				read, err := c.read()
 				if err != nil {
 					_ = c.Close()
 					c.logger.Error("failed to read packet", "username", identityData.DisplayName, "err", err)
 					return
 				}
 
-				p := pk.(packet.Packet)
+				pk, ok := read.(packet.Packet)
+				if !ok {
+					c.deferPacket(read)
+					continue
+				}
+
 				deferrable := true
 				for _, id := range c.expectedIds.Load().([]uint32) {
-					if p.ID() == id {
+					if pk.ID() == id {
 						deferrable = false
-						if err := c.handlePacket(p); err != nil {
+						if err := c.handlePacket(pk); err != nil {
 							c.logger.Error("failed to handle packet", "username", identityData.DisplayName, "err", err)
 							_ = c.Close()
 							return
@@ -111,7 +116,7 @@ func NewConn(conn io.ReadWriteCloser, addr net.Addr, logger *slog.Logger, token 
 				}
 
 				if deferrable {
-					c.deferPacket(p)
+					c.deferPacket(pk)
 				}
 			}
 		}
@@ -128,7 +133,7 @@ func (c *Conn) ReadPacket() (any, error) {
 		c.deferredPackets = c.deferredPackets[1:]
 		return pk, nil
 	}
-	return c.read(false)
+	return c.read()
 }
 
 // WritePacket encodes and writes the provided packet to the underlying connection.
@@ -247,7 +252,7 @@ func (c *Conn) Close() (err error) {
 // Packets are prefixed with a special byte (packetDecodeNeeded or packetDecodeNotNeeded) indicating
 // the decoding necessity. If decode is false and the packet does not require decoding,
 // it returns the raw decompressed payload.
-func (c *Conn) read(decode bool) (pk any, err error) {
+func (c *Conn) read() (pk any, err error) {
 	select {
 	case <-c.closed:
 		return nil, net.ErrClosed
@@ -266,7 +271,7 @@ func (c *Conn) read(decode bool) (pk any, err error) {
 			return nil, err
 		}
 
-		if payload[0] == packetDecodeNotNeeded && !decode {
+		if payload[0] == packetDecodeNotNeeded {
 			return decompressed, nil
 		}
 
@@ -287,7 +292,7 @@ func (c *Conn) read(decode bool) (pk any, err error) {
 }
 
 // deferPacket defers a packet to be returned later in ReadPacket().
-func (c *Conn) deferPacket(pk packet.Packet) {
+func (c *Conn) deferPacket(pk any) {
 	c.deferredPackets = append(c.deferredPackets, pk)
 }
 
