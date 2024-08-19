@@ -14,12 +14,10 @@ import (
 	"time"
 
 	"github.com/cooldogedev/spectrum/internal"
-	proto "github.com/cooldogedev/spectrum/protocol"
+	"github.com/cooldogedev/spectrum/protocol"
 	packet2 "github.com/cooldogedev/spectrum/server/packet"
 	"github.com/golang/snappy"
 	"github.com/sandertv/gophertunnel/minecraft"
-	"github.com/sandertv/gophertunnel/minecraft/protocol"
-	"github.com/sandertv/gophertunnel/minecraft/protocol/login"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
@@ -31,29 +29,27 @@ const (
 // Conn represents a connection to a server, managing packet reading and writing
 // over an underlying io.ReadWriteCloser.
 type Conn struct {
-	conn   io.ReadWriteCloser
-	reader *proto.Reader
-	writer *proto.Writer
-	logger *slog.Logger
+	conn       io.ReadWriteCloser
+	clientConn *minecraft.Conn
+	logger     *slog.Logger
+
+	reader   *protocol.Reader
+	writer   *protocol.Writer
+	writerMu sync.Mutex
 
 	runtimeID uint64
 	uniqueID  int64
-
-	addr  net.Addr
-	token string
-
-	clientData   login.ClientData
-	identityData login.IdentityData
+	token     string
 
 	gameData minecraft.GameData
 	shieldID int32
 
-	header   *packet.Header
-	headerMu sync.Mutex
+	protocol minecraft.Protocol
+	pool     packet.Pool
 
-	expectedIds     atomic.Value
 	deferredPackets []any
-	pool            packet.Pool
+	expectedIds     atomic.Value
+	header          *packet.Header
 
 	connected chan struct{}
 	spawned   chan struct{}
@@ -62,21 +58,20 @@ type Conn struct {
 
 // NewConn creates a new Conn instance using the provided io.ReadWriteCloser.
 // It is used for reading and writing packets to the underlying connection.
-func NewConn(conn io.ReadWriteCloser, addr net.Addr, logger *slog.Logger, token string, clientData login.ClientData, identityData login.IdentityData, pool packet.Pool) *Conn {
+func NewConn(conn io.ReadWriteCloser, client *minecraft.Conn, logger *slog.Logger, proto minecraft.Protocol, token string) *Conn {
 	c := &Conn{
-		conn:   conn,
-		reader: proto.NewReader(conn),
-		writer: proto.NewWriter(conn),
-		logger: logger,
+		conn:       conn,
+		clientConn: client,
+		logger:     logger,
 
-		addr:  addr,
+		reader: protocol.NewReader(conn),
+		writer: protocol.NewWriter(conn),
+
 		token: token,
 
-		clientData:   clientData,
-		identityData: identityData,
-
-		header: &packet.Header{},
-		pool:   pool,
+		protocol: proto,
+		pool:     proto.Packets(false),
+		header:   &packet.Header{},
 
 		connected: make(chan struct{}),
 		spawned:   make(chan struct{}),
@@ -90,32 +85,41 @@ func NewConn(conn io.ReadWriteCloser, addr net.Addr, logger *slog.Logger, token 
 			case <-c.spawned:
 				return
 			default:
-				read, err := c.read()
+				payload, err := c.read()
 				if err != nil {
 					_ = c.Close()
-					c.logger.Error("failed to read packet", "username", identityData.DisplayName, "err", err)
+					c.logger.Error("failed to read packet", "username", client.IdentityData().DisplayName, "err", err)
 					return
 				}
 
-				pk, ok := read.(packet.Packet)
+				pk, ok := payload.(packet.Packet)
 				if !ok {
-					c.deferPacket(read)
+					c.deferPacket(payload)
 					continue
 				}
 
-				deferrable := true
+				handled := false
 				for _, id := range c.expectedIds.Load().([]uint32) {
-					if pk.ID() == id {
-						deferrable = false
-						if err := c.handlePacket(pk); err != nil {
-							c.logger.Error("failed to handle packet", "username", identityData.DisplayName, "err", err)
+					for _, latest := range c.protocol.ConvertToLatest(pk, client) {
+						if pk.ID() != id {
+							continue
+						}
+
+						handled = true
+						deferrable, err := c.handlePacket(latest)
+						if err != nil {
+							c.logger.Error("failed to handle packet", "username", client.IdentityData().DisplayName, "err", err)
 							_ = c.Close()
 							return
+						}
+
+						if deferrable {
+							c.deferPacket(pk)
 						}
 					}
 				}
 
-				if deferrable {
+				if !handled {
 					c.deferPacket(pk)
 				}
 			}
@@ -138,8 +142,8 @@ func (c *Conn) ReadPacket() (any, error) {
 
 // WritePacket encodes and writes the provided packet to the underlying connection.
 func (c *Conn) WritePacket(pk packet.Packet) error {
-	c.headerMu.Lock()
-	defer c.headerMu.Unlock()
+	c.writerMu.Lock()
+	defer c.writerMu.Unlock()
 
 	buf := internal.BufferPool.Get().(*bytes.Buffer)
 	defer func() {
@@ -151,12 +155,14 @@ func (c *Conn) WritePacket(pk packet.Packet) error {
 	if err := c.header.Write(buf); err != nil {
 		return err
 	}
-	pk.Marshal(protocol.NewWriter(buf, c.shieldID))
+	pk.Marshal(c.protocol.NewWriter(buf, c.shieldID))
 	return c.writer.Write(snappy.Encode(nil, buf.Bytes()))
 }
 
 // Write writes provided byte slice to the underlying connection.
 func (c *Conn) Write(p []byte) error {
+	c.writerMu.Lock()
+	defer c.writerMu.Unlock()
 	return c.writer.Write(snappy.Encode(nil, p))
 }
 
@@ -286,7 +292,7 @@ func (c *Conn) read() (pk any, err error) {
 			return nil, fmt.Errorf("unknown packet ID %v", header.PacketID)
 		}
 		pk = factory()
-		pk.(packet.Packet).Marshal(protocol.NewReader(buf, c.shieldID, false))
+		pk.(packet.Packet).Marshal(c.protocol.NewReader(buf, c.shieldID, false))
 		return pk, nil
 	}
 }
@@ -303,18 +309,18 @@ func (c *Conn) expect(ids ...uint32) {
 
 // sendConnectionRequest initiates the connection sequence by sending a ConnectionRequest packet to the underlying connection.
 func (c *Conn) sendConnectionRequest() error {
-	clientData, err := json.Marshal(c.clientData)
+	clientData, err := json.Marshal(c.clientConn.ClientData())
 	if err != nil {
 		return err
 	}
 
-	identityData, err := json.Marshal(c.identityData)
+	identityData, err := json.Marshal(c.clientConn.IdentityData())
 	if err != nil {
 		return err
 	}
 
 	err = c.WritePacket(&packet2.ConnectionRequest{
-		Addr:         c.addr.String(),
+		Addr:         c.clientConn.RemoteAddr().String(),
 		Token:        c.token,
 		ClientData:   clientData,
 		IdentityData: identityData,
@@ -322,12 +328,12 @@ func (c *Conn) sendConnectionRequest() error {
 	if err != nil {
 		return err
 	}
-	c.logger.Debug("sent connection_request, expecting connection_response", "username", c.identityData.DisplayName)
+	c.logger.Debug("sent connection_request, expecting connection_response", "username", c.clientConn.IdentityData().DisplayName)
 	return nil
 }
 
 // handlePacket handles an expected packet that was received before the spawning sequence finalization.
-func (c *Conn) handlePacket(pk packet.Packet) error {
+func (c *Conn) handlePacket(pk packet.Packet) (bool, error) {
 	switch pk := pk.(type) {
 	case *packet2.ConnectionResponse:
 		return c.handleConnectionResponse(pk)
@@ -338,22 +344,22 @@ func (c *Conn) handlePacket(pk packet.Packet) error {
 	case *packet.PlayStatus:
 		return c.handlePlayStatus(pk)
 	default:
-		return nil
+		return false, nil
 	}
 }
 
 // handleConnectionResponse handles the ConnectionResponse, which is the final packet in the connection sequence
 // it signals that we may proceed with the spawning sequence.
-func (c *Conn) handleConnectionResponse(pk *packet2.ConnectionResponse) error {
+func (c *Conn) handleConnectionResponse(pk *packet2.ConnectionResponse) (bool, error) {
 	c.runtimeID = pk.RuntimeID
 	c.uniqueID = pk.UniqueID
 	close(c.connected)
-	c.logger.Debug("received connection_response, expecting start_game", "username", c.identityData.DisplayName)
-	return nil
+	c.logger.Debug("received connection_response, expecting start_game", "username", c.clientConn.IdentityData().DisplayName)
+	return false, nil
 }
 
 // handleStartGame handles the StartGame packet.
-func (c *Conn) handleStartGame(pk *packet.StartGame) error {
+func (c *Conn) handleStartGame(pk *packet.StartGame) (bool, error) {
 	c.expect(packet.IDChunkRadiusUpdated)
 	c.gameData = minecraft.GameData{
 		Difficulty:                   pk.Difficulty,
@@ -396,30 +402,28 @@ func (c *Conn) handleStartGame(pk *packet.StartGame) error {
 	}
 
 	if err := c.WritePacket(&packet.RequestChunkRadius{ChunkRadius: 16}); err != nil {
-		return err
+		return false, err
 	}
-	c.logger.Debug("received start_game, expecting chunk_radius_updated", "username", c.identityData.DisplayName)
-	return nil
+	c.logger.Debug("received start_game, expecting chunk_radius_updated", "username", c.clientConn.IdentityData().DisplayName)
+	return false, nil
 }
 
 // handleChunkRadiusUpdated handles the first ChunkRadiusUpdated packet, which updates the initial chunk
 // radius of the connection.
-func (c *Conn) handleChunkRadiusUpdated(pk *packet.ChunkRadiusUpdated) error {
+func (c *Conn) handleChunkRadiusUpdated(pk *packet.ChunkRadiusUpdated) (bool, error) {
 	c.expect(packet.IDPlayStatus)
-	c.deferPacket(pk)
 	c.gameData.ChunkRadius = pk.ChunkRadius
-	c.logger.Debug("received chunk_radius_updated, expecting play_status", "username", c.identityData.DisplayName)
-	return nil
+	c.logger.Debug("received chunk_radius_updated, expecting play_status", "username", c.clientConn.IdentityData().DisplayName)
+	return true, nil
 }
 
 // handlePlayStatus handles the first PlayStatus packet. It is the final packet in the spawning sequence,
 // it responds to the server with a packet.SetLocalPlayerAsInitialised to finalize the spawning sequence and spawn the player.
-func (c *Conn) handlePlayStatus(pk *packet.PlayStatus) error {
-	c.deferPacket(pk)
+func (c *Conn) handlePlayStatus(_ *packet.PlayStatus) (bool, error) {
 	if err := c.WritePacket(&packet.SetLocalPlayerAsInitialised{EntityRuntimeID: c.runtimeID}); err != nil {
-		return err
+		return false, err
 	}
 	close(c.spawned)
-	c.logger.Debug("received play_status, finalizing spawn sequence", "username", c.identityData.DisplayName)
-	return nil
+	c.logger.Debug("received play_status, finalizing spawn sequence", "username", c.clientConn.IdentityData().DisplayName)
+	return true, nil
 }

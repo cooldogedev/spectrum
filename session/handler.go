@@ -65,7 +65,10 @@ func handleServer(s *Session) {
 					continue
 				}
 
-				s.tracker.handlePacket(pk)
+				for _, latest := range s.clientConn.Proto().ConvertToLatest(pk, s.clientConn) {
+					s.tracker.handlePacket(latest)
+				}
+
 				if err := s.clientConn.WritePacket(pk); err != nil {
 					if isErrorLoggable(err) {
 						s.logger.Error("failed to write packet to client", "err", err)
@@ -195,7 +198,15 @@ func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, pay
 	pk.Marshal(s.clientConn.Proto().NewReader(buf, s.shieldID, true))
 	s.processor.ProcessClient(ctx, pk)
 	if !ctx.Cancelled() {
-		return s.Server().WritePacket(pk)
+		if s.opts.SyncProtocol {
+			return s.Server().WritePacket(pk)
+		}
+
+		for _, latest := range s.clientConn.Proto().ConvertToLatest(pk, s.clientConn) {
+			if err := s.Server().WritePacket(latest); err != nil {
+				return err
+			}
+		}
 	}
 	return
 }

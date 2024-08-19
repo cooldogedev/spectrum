@@ -331,7 +331,14 @@ func (s *Session) dial(ctx context.Context, addr string) (*server.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return server.NewConn(conn, s.clientConn.RemoteAddr(), s.logger, s.opts.Token, s.clientConn.ClientData(), s.clientConn.IdentityData(), packet.NewServerPool()), nil
+
+	var proto minecraft.Protocol
+	if s.opts.SyncProtocol {
+		proto = s.clientConn.Proto()
+	} else {
+		proto = minecraft.DefaultProtocol
+	}
+	return server.NewConn(conn, s.clientConn, s.logger, proto, s.opts.Token), nil
 }
 
 // fallback attempts to transfer the session to a fallback server provided by the discovery.

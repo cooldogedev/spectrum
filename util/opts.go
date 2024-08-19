@@ -13,6 +13,10 @@ type Opts struct {
 	LatencyInterval int64 `yaml:"latency_interval"`
 	// ShutdownMessage is the message displayed to clients when Spectrum shuts down.
 	ShutdownMessage string `yaml:"shutdown_message"`
+	// SyncProtocol determines the protocol version the proxy should use when communicating with servers.
+	// When enabled, the proxy uses the client's protocol version (minecraft.Protocol) for reading and
+	// writing packets. If disabled, the proxy defaults to using the latest protocol version (minecraft.DefaultProtocol).
+	SyncProtocol bool
 	// Token is the authentication token that Spectrum uses to authenticate with servers.
 	Token string `yaml:"token"`
 }
@@ -24,5 +28,6 @@ func DefaultOpts() *Opts {
 		AutoLogin:       true,
 		LatencyInterval: 3000,
 		ShutdownMessage: "Spectrum closed.",
+		SyncProtocol:    false,
 	}
 }
