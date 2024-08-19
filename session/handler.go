@@ -10,7 +10,6 @@ import (
 
 	"github.com/cooldogedev/spectrum/internal"
 	packet2 "github.com/cooldogedev/spectrum/server/packet"
-	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
@@ -96,7 +95,7 @@ func handleClient(s *Session) {
 	defer s.Close()
 
 	header := &packet.Header{}
-	pool := packet.NewClientPool()
+	pool := s.clientConn.Proto().Packets(true)
 	var deferredPackets [][]byte
 	for {
 		select {
@@ -193,7 +192,7 @@ func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, pay
 	}
 
 	pk := factory()
-	pk.Marshal(protocol.NewReader(buf, s.shieldID, true))
+	pk.Marshal(s.clientConn.Proto().NewReader(buf, s.shieldID, true))
 	s.processor.ProcessClient(ctx, pk)
 	if !ctx.Cancelled() {
 		return s.Server().WritePacket(pk)

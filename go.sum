@@ -101,8 +101,8 @@ github.com/quic-go/quic-go v0.46.0/go.mod h1:1dLehS7TIR64+vxGR70GDcatWTOtMX2PUtn
 github.com/russross/blackfriday v1.5.2/go.mod h1:JO/DiYxRf+HjHt06OyowR9PTA263kcR/rfWxYHBV53g=
 github.com/sandertv/go-raknet v1.14.1 h1:V2Gslo+0x4jfj+p0PM48mWxmMbYkxSlgeKy//y3ZrzI=
 github.com/sandertv/go-raknet v1.14.1/go.mod h1:/yysjwfCXm2+2OY8mBazLzcxJ3irnylKCyG3FLgUPVU=
-github.com/sandertv/gophertunnel v1.39.3 h1:oc0PPOhrB9utScy8SEYJTWQIFexzf8CVizmB5MLsb6A=
-github.com/sandertv/gophertunnel v1.39.3/go.mod h1:uSaX7RbVaCcxsGAx2vyZnkT0M6kZFGCdAqLn0+wuKyY=
+github.com/sandertv/gophertunnel v1.40.2-0.20240819155723-46502d4cb6ce h1:4iKcIz/FF4lAc1J8qdGVPTbyelfaH4vabmZDpkfefsU=
+github.com/sandertv/gophertunnel v1.40.2-0.20240819155723-46502d4cb6ce/go.mod h1:uSaX7RbVaCcxsGAx2vyZnkT0M6kZFGCdAqLn0+wuKyY=
 github.com/scylladb/go-set v1.0.2 h1:SkvlMCKhP0wyyct6j+0IHJkBkSZL+TDzZ4E7f7BCcRE=
 github.com/scylladb/go-set v1.0.2/go.mod h1:DkpGd78rljTxKAnTDPFqXSGxvETQnJyuSOQwsHycqfs=
 github.com/sergi/go-diff v1.0.0/go.mod h1:0CfEIISq7TuYL3j771MWULgwwjU+GofnZX9QAmXWZgo=
