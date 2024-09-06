@@ -28,7 +28,9 @@ func (p *smoothProcessor) ProcessClient(_ *session.Context, pk packet.Packet) {
 
 func main() {
 	logger := slog.Default()
-	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery("127.0.0.1:19133", ""), logger, nil, nil)
+	opts := util.DefaultOpts()
+	opts.ClientDecode = []uint32{packet.IDPlayerAuthInput}
+	proxy := spectrum.NewSpectrum(server.NewStaticDiscovery("127.0.0.1:19133", ""), logger, opts, nil)
 	if err := proxy.Listen(minecraft.ListenConfig{StatusProvider: util.NewStatusProvider("Spectrum Proxy", "Spectrum")}); err != nil {
 		return
 	}
