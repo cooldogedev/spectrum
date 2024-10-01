@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/cooldogedev/spectrum/api/packet"
 	"github.com/cooldogedev/spectrum/internal"
@@ -14,11 +15,11 @@ import (
 // Client represents a connection to the API service, managing packet reading and writing
 // over an underlying net.Conn.
 type Client struct {
-	conn net.Conn
-	pool packet.Pool
-
+	conn   net.Conn
+	pool   packet.Pool
 	writer *protocol.Writer
 	reader *protocol.Reader
+	mu     sync.Mutex
 }
 
 // NewClient creates a new Client instance using the provided net.Conn.
@@ -63,6 +64,9 @@ func (c *Client) ReadPacket() (pk packet.Packet, err error) {
 
 // WritePacket encodes and writes the provided packet to the underlying connection.
 func (c *Client) WritePacket(pk packet.Packet) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	buf := internal.BufferPool.Get().(*bytes.Buffer)
 	defer func() {
 		buf.Reset()
