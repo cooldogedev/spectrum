@@ -43,7 +43,7 @@ func NewSpectrum(discovery server.Discovery, logger *slog.Logger, opts *util.Opt
 	}
 
 	if transport == nil {
-		transport = tr.NewTCP()
+		transport = tr.NewSpectral(logger)
 	}
 	return &Spectrum{
 		discovery: discovery,

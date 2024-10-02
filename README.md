@@ -10,7 +10,7 @@ Explore how to use Spectrum in the [example](example) directory.
 
 ## Implementations
 
-Spectrum's protocol uses TCP and QUIC instead of RakNet and the standard Minecraft protocol, providing better reliability and performance. Check out compatible implementations:
+Spectrum's protocol uses Spectral, TCP and QUIC instead of RakNet and the standard Minecraft protocol, providing better reliability and performance. Check out compatible implementations:
 
 - [Dragonfly](https://github.com/cooldogedev/spectrum-df)
 - [PocketMine-MP](https://github.com/cooldogedev/spectrum-pm)
@@ -32,7 +32,7 @@ Spectrum introduces Discovery, a method for server determination when players jo
 The `Processor` interface in Spectrum handles incoming and outgoing packets within sessions, enabling custom filtering and manipulation. This functionality supports implementing anti-cheat measures and other security features. Downstream servers are responsible for prefixing packets to indicate decoding necessity, as per Spectrum protocol specifications.
 
 ## Why Spectrum?
-- **Protocol Innovation**: Utilizes TCP and QUIC for enhanced reliability and performance, unlike traditional proxies relying on RakNet and standard Minecraft protocol.
+- **Protocol Innovation**: Utilizes Spectral, TCP and QUIC for enhanced reliability and performance, unlike traditional proxies relying on RakNet and standard Minecraft protocol.
 
 - **Efficient Packet Handling**: Maintains high throughput by bypassing unnecessary packet decoding, optimizing data transmission and reducing latency.
 
