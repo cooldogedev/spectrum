@@ -4,7 +4,7 @@ go 1.23.0
 
 require (
 	github.com/brentp/intintmap v0.0.0-20190211203843-30dc0ade9af9
-	github.com/cooldogedev/spectral v0.0.1
+	github.com/cooldogedev/spectral v0.0.2
 	github.com/go-gl/mathgl v1.1.0
 	github.com/golang/snappy v0.0.4
 	github.com/quic-go/quic-go v0.47.0
@@ -16,7 +16,7 @@ require (
 	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/go-jose/go-jose/v3 v3.0.3 // indirect
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
-	github.com/google/pprof v0.0.0-20240929191954-255acd752d31 // indirect
+	github.com/google/pprof v0.0.0-20241001023024-f4c0cfd0cf1d // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/compress v1.17.10 // indirect
 	github.com/muhammadmuzzammil1998/jsonc v1.0.0 // indirect
