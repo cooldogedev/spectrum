@@ -2,7 +2,6 @@ package transport
 
 import (
 	"context"
-	"errors"
 	"io"
 	"log/slog"
 	"sync"
@@ -39,24 +38,23 @@ func (s *Spectral) Dial(ctx context.Context, addr string) (io.ReadWriteCloser, e
 		if err != nil {
 			return nil, err
 		}
+
 		conn = c
 		s.connections[addr] = conn
 		s.logger.Debug("established connection", "addr", addr)
-		go func() {
+		go func(conn spectral.Connection, addr string) {
 			<-conn.Context().Done()
 			s.mu.Lock()
-			delete(s.connections, addr)
-			s.mu.Unlock()
-			if err := conn.Context().Err(); err != nil && !errors.Is(err, context.Canceled) {
-				s.logger.Error("closed connection", "addr", addr, "err", err)
-			} else {
-				s.logger.Debug("closed connection", "addr", addr)
+			if found, ok := s.connections[addr]; ok && found == conn {
+				delete(s.connections, addr)
 			}
-		}()
+			s.mu.Unlock()
+			s.logger.Debug("closed connection", "addr", addr, "cause", context.Cause(conn.Context()))
+		}(conn, addr)
 	}
 	stream, err := conn.OpenStream(ctx)
 	if err != nil {
-		_ = conn.CloseWithError(0, "failed to open stream")
+		delete(s.connections, addr)
 		return nil, err
 	}
 	return stream, nil

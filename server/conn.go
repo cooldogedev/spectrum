@@ -191,7 +191,7 @@ func (c *Conn) ConnectContext(ctx context.Context) error {
 	case <-c.closed:
 		return net.ErrClosed
 	case <-ctx.Done():
-		return ctx.Err()
+		return context.Cause(ctx)
 	case <-c.connected:
 		return nil
 	}
@@ -218,7 +218,7 @@ func (c *Conn) SpawnContext(ctx context.Context) error {
 	case <-c.closed:
 		return net.ErrClosed
 	case <-ctx.Done():
-		return ctx.Err()
+		return context.Cause(ctx)
 	case <-c.spawned:
 		return nil
 	}
