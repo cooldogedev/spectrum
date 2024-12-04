@@ -15,8 +15,8 @@ github.com/brentp/intintmap v0.0.0-20190211203843-30dc0ade9af9 h1:/G0ghZwrhou0Wq
 github.com/brentp/intintmap v0.0.0-20190211203843-30dc0ade9af9/go.mod h1:TOk10ahXejq9wkEaym3KPRNeuR/h5Jx+s8QRWIa2oTM=
 github.com/buger/jsonparser v0.0.0-20181115193947-bf1c66bbce23/go.mod h1:bbYlZJ7hK1yFx9hf58LP0zeX7UjIGs20ufpu3evjr+s=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
-github.com/cooldogedev/spectral v0.0.3 h1:hlA4itfvMLQ0zFzxp+j3lErRzGWIQnzx7/Hhcg/5tfc=
-github.com/cooldogedev/spectral v0.0.3/go.mod h1:qsFo4WBv4FAoF+eVBjm0gMTdFl7ACbBKKye0GY8nP7I=
+github.com/cooldogedev/spectral v0.0.4 h1:s5kwtnE3hkq42xoVUpWjQOdSQ8rsjzAjdgcnCdvWxTw=
+github.com/cooldogedev/spectral v0.0.4/go.mod h1:qsFo4WBv4FAoF+eVBjm0gMTdFl7ACbBKKye0GY8nP7I=
 github.com/coreos/go-systemd v0.0.0-20181012123002-c6f51f82210d/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
