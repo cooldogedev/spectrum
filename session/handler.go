@@ -65,9 +65,7 @@ func handleServer(s *Session) {
 					continue
 				}
 
-				for _, latest := range s.clientConn.Proto().ConvertToLatest(pk, s.clientConn) {
-					s.tracker.handlePacket(latest)
-				}
+				s.tracker.handlePacket(pk)
 
 				if err := s.clientConn.WritePacket(pk); err != nil {
 					if isErrorLoggable(err) {
