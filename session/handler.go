@@ -65,8 +65,12 @@ func handleServer(s *Session) {
 					continue
 				}
 
-				for _, latest := range s.clientConn.Proto().ConvertToLatest(pk, s.clientConn) {
-					s.tracker.handlePacket(latest)
+				if s.opts.SyncProtocol {
+					for _, latest := range s.clientConn.Proto().ConvertToLatest(pk, s.clientConn) {
+						s.tracker.handlePacket(latest)
+					}
+				} else {
+					s.tracker.handlePacket(pk)
 				}
 
 				if err := s.clientConn.WritePacket(pk); err != nil {
