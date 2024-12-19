@@ -4,7 +4,7 @@ go 1.23.3
 
 require (
 	github.com/brentp/intintmap v0.0.0-20190211203843-30dc0ade9af9
-	github.com/cooldogedev/spectral v0.0.4
+	github.com/cooldogedev/spectral v0.0.5
 	github.com/go-gl/mathgl v1.2.0
 	github.com/golang/snappy v0.0.4
 	github.com/quic-go/quic-go v0.48.2
@@ -24,9 +24,9 @@ require (
 	github.com/sandertv/go-raknet v1.14.2 // indirect
 	go.uber.org/mock v0.5.0 // indirect
 	golang.org/x/crypto v0.31.0 // indirect
-	golang.org/x/exp v0.0.0-20241215155358-4a5509556b9e // indirect
+	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67 // indirect
 	golang.org/x/mod v0.22.0 // indirect
-	golang.org/x/net v0.32.0 // indirect
+	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/oauth2 v0.24.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
