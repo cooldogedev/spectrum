@@ -191,7 +191,7 @@ func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, pay
 
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("panic while decoding packet: %v", r)
+			err = fmt.Errorf("panic while decoding packet %v: %v", header.PacketID, r)
 		}
 	}()
 
