@@ -123,11 +123,13 @@ func handleClient(s *Session) {
 			}
 
 			if len(deferredPackets) > 0 {
-				for _, deferredPacket := range deferredPackets {
+				for i, deferredPacket := range deferredPackets {
 					if err := handleClientPacket(s, header, pool, deferredPacket); err != nil && isErrorLoggable(err) {
-						s.logger.Error("failed to write packet to server", "err", err)
+						s.logger.Error("failed to write deferred packet to server", "err", err)
 					}
+					deferredPackets[i] = nil
 				}
+				deferredPackets = deferredPackets[:0]
 				deferredPackets = nil
 			}
 
