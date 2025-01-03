@@ -3,7 +3,6 @@ module github.com/cooldogedev/spectrum
 go 1.23.3
 
 require (
-	github.com/brentp/intintmap v0.0.0-20190211203843-30dc0ade9af9
 	github.com/cooldogedev/spectral v0.0.5
 	github.com/go-gl/mathgl v1.2.0
 	github.com/golang/snappy v0.0.4

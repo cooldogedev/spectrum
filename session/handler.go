@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 	"time"
 
-	"github.com/cooldogedev/spectrum/internal"
 	packet2 "github.com/cooldogedev/spectrum/server/packet"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
@@ -181,7 +181,7 @@ func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, pay
 		return errors.New("failed to decode header")
 	}
 
-	if !internal.ClientPacketExists(header.PacketID) {
+	if !slices.Contains(s.opts.ClientDecode, header.PacketID) {
 		s.processor.ProcessClientEncoded(ctx, &payload)
 		if !ctx.Cancelled() {
 			return s.Server().Write(payload)
