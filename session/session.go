@@ -97,38 +97,38 @@ func (s *Session) LoginContext(ctx context.Context) (err error) {
 	identityData := s.clientConn.IdentityData()
 	serverAddr, err := s.discovery.Discover(s.clientConn)
 	if err != nil {
-		s.logger.Debug("discovery failed", "username", identityData.DisplayName, "err", err)
+		s.logger.Debug("discovery failed", "err", err)
 		return err
 	}
 
 	serverConn, err := s.dial(ctx, serverAddr)
 	if err != nil {
-		s.logger.Debug("dialer failed", "username", identityData.DisplayName, "err", err)
+		s.logger.Debug("dialer failed", "err", err)
 		return err
 	}
 
 	s.serverAddr = serverAddr
 	s.serverConn = serverConn
 	if err := serverConn.ConnectContext(ctx); err != nil {
-		s.logger.Debug("connection sequence failed", "username", identityData.DisplayName, "err", err)
+		s.logger.Debug("connection sequence failed", "err", err)
 		return err
 	}
 
 	if err := serverConn.SpawnContext(ctx); err != nil {
-		s.logger.Debug("spawn sequence failed", "username", identityData.DisplayName, "err", err)
+		s.logger.Debug("spawn sequence failed", "err", err)
 		return err
 	}
 
 	gameData := serverConn.GameData()
 	s.processor.ProcessStartGame(NewContext(), &gameData)
 	if err := s.clientConn.StartGame(gameData); err != nil {
-		s.logger.Debug("startgame sequence failed", "username", identityData.DisplayName, "err", err)
+		s.logger.Debug("startgame sequence failed", "err", err)
 		return err
 	}
 	s.shieldID = serverConn.ShieldID()
 	s.loggedIn = true
 	s.registry.AddSession(identityData.XUID, s)
-	s.logger.Info("logged in session", "username", identityData.DisplayName)
+	s.logger.Info("logged in session")
 	return
 }
 
@@ -176,23 +176,22 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 		}
 	}()
 
-	identityData := s.clientConn.IdentityData()
 	conn, err := s.dial(ctx, addr)
 	if err != nil {
-		s.logger.Debug("dialer failed", "username", identityData.DisplayName, "err", err)
+		s.logger.Debug("dialer failed", "err", err)
 		return err
 	}
 
 	s.sendMetadata(true)
 	if err := conn.ConnectContext(ctx); err != nil {
 		_ = conn.Close()
-		s.logger.Debug("connection sequence failed", "username", identityData.DisplayName, "err", err)
+		s.logger.Debug("connection sequence failed", "err", err)
 		return err
 	}
 
 	if err := conn.SpawnContext(ctx); err != nil {
 		_ = conn.Close()
-		s.logger.Debug("spawn sequence failed", "username", identityData.DisplayName, "err", err)
+		s.logger.Debug("spawn sequence failed", "err", err)
 		return err
 	}
 
@@ -235,12 +234,13 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 	_ = s.clientConn.WritePacket(&packet.SetPlayerGameType{GameType: serverGameData.PlayerGameMode})
 	_ = s.clientConn.WritePacket(&packet.GameRulesChanged{GameRules: serverGameData.GameRules})
 
+	origin := s.serverAddr
 	s.animation.Clear(s.clientConn, serverGameData)
 	s.serverAddr = addr
 	s.serverConn = conn
 	s.serverMu.Unlock()
-	s.processor.ProcessPostTransfer(NewContext(), &s.serverAddr, &addr)
-	s.logger.Debug("transferred session", "username", identityData.DisplayName, "addr", addr)
+	s.processor.ProcessPostTransfer(NewContext(), &origin, &addr)
+	s.logger.Debug("transferred session", "origin", origin, "target", addr)
 	return nil
 }
 
@@ -295,8 +295,11 @@ func (s *Session) Server() *server.Conn {
 
 // Disconnect sends a packet.Disconnect to the client and closes the session.
 func (s *Session) Disconnect(message string) {
-	_ = s.clientConn.WritePacket(&packet.Disconnect{Message: message})
-	_ = s.Close()
+	if !s.closed.Load() {
+		s.logger.Debug("disconnecting session", "message", message)
+		_ = s.clientConn.WritePacket(&packet.Disconnect{Message: message})
+		_ = s.Close()
+	}
 }
 
 // Close closes the session, including the server and client connections.
@@ -316,9 +319,9 @@ func (s *Session) Close() (err error) {
 		identity := s.clientConn.IdentityData()
 		s.registry.RemoveSession(identity.XUID)
 		if s.loggedIn {
-			s.logger.Info("closed session", "username", identity.DisplayName)
+			s.logger.Info("closed session")
 		} else {
-			s.logger.Debug("closed unlogged session", "username", identity.DisplayName)
+			s.logger.Debug("closed unlogged session")
 		}
 	})
 	return
@@ -338,7 +341,7 @@ func (s *Session) dial(ctx context.Context, addr string) (*server.Conn, error) {
 	} else {
 		proto = minecraft.DefaultProtocol
 	}
-	return server.NewConn(conn, s.clientConn, s.logger, proto, s.opts.Token), nil
+	return server.NewConn(conn, s.clientConn, s.logger.With("addr", addr), proto, s.opts.Token), nil
 }
 
 // fallback attempts to transfer the session to a fallback server provided by the discovery.
@@ -349,9 +352,10 @@ func (s *Session) fallback() (err error) {
 	}
 
 	if err := s.Transfer(addr); err != nil {
+		s.logger.Debug("failed to transfer session to a fallback server", "addr", addr, "err", err)
 		return err
 	}
-	s.logger.Debug("transferred session to a fallback server", "username", s.clientConn.IdentityData().DisplayName, "addr", addr)
+	s.logger.Debug("transferred session to a fallback server", "addr", addr)
 	return
 }
 

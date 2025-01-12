@@ -70,18 +70,20 @@ func (s *Spectrum) Accept() (*session.Session, error) {
 	}
 
 	conn := c.(*minecraft.Conn)
-	newSession := session.NewSession(conn, s.logger, s.registry, s.discovery, s.opts, s.transport)
+	identityData := conn.IdentityData()
+	logger := s.logger.With("username", identityData.DisplayName)
+	newSession := session.NewSession(conn, logger, s.registry, s.discovery, s.opts, s.transport)
 	if s.opts.AutoLogin {
 		go func() {
 			if err := newSession.Login(); err != nil {
 				newSession.Disconnect(err.Error())
 				if !errors.Is(err, context.Canceled) {
-					s.logger.Error("failed to login session", "err", err)
+					logger.Error("failed to login session", "err", err)
 				}
 			}
 		}()
 	}
-	s.logger.Debug("accepted session", "username", conn.IdentityData().DisplayName, "addr", conn.RemoteAddr().String())
+	logger.Debug("accepted session")
 	return newSession, nil
 }
 

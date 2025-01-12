@@ -39,12 +39,10 @@ func handleServer(s *Session) {
 
 				if !s.closed.Load() {
 					if isErrorLoggable(err) {
-						s.logger.Error("failed to read packet from server", "username", s.clientConn.IdentityData().DisplayName, "err", err)
+						s.logger.Error("failed to read packet from server", "err", err)
 					}
 
-					if err := s.fallback(); err != nil {
-						s.logger.Error("fallback failed", "username", s.clientConn.IdentityData().DisplayName, "err", err)
-					} else {
+					if err := s.fallback(); err == nil {
 						continue
 					}
 				}

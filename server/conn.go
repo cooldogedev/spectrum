@@ -88,7 +88,7 @@ func NewConn(conn io.ReadWriteCloser, client *minecraft.Conn, logger *slog.Logge
 				payload, err := c.read()
 				if err != nil {
 					_ = c.Close()
-					c.logger.Error("failed to read packet", "username", client.IdentityData().DisplayName, "err", err)
+					c.logger.Error("failed to read connection sequence packet", "err", err)
 					return
 				}
 
@@ -108,7 +108,7 @@ func NewConn(conn io.ReadWriteCloser, client *minecraft.Conn, logger *slog.Logge
 						handled = true
 						deferrable, err := c.handlePacket(latest)
 						if err != nil {
-							c.logger.Error("failed to handle packet", "username", client.IdentityData().DisplayName, "err", err)
+							c.logger.Error("failed to handle connection sequence packet", "err", err)
 							_ = c.Close()
 							return
 						}
@@ -328,7 +328,7 @@ func (c *Conn) sendConnectionRequest() error {
 	if err != nil {
 		return err
 	}
-	c.logger.Debug("sent connection_request, expecting connection_response", "username", c.clientConn.IdentityData().DisplayName)
+	c.logger.Debug("sent connection_request, expecting connection_response")
 	return nil
 }
 
@@ -354,7 +354,7 @@ func (c *Conn) handleConnectionResponse(pk *packet2.ConnectionResponse) (bool, e
 	c.runtimeID = pk.RuntimeID
 	c.uniqueID = pk.UniqueID
 	close(c.connected)
-	c.logger.Debug("received connection_response, expecting start_game", "username", c.clientConn.IdentityData().DisplayName)
+	c.logger.Debug("received connection_response, expecting start_game")
 	return false, nil
 }
 
@@ -404,7 +404,7 @@ func (c *Conn) handleStartGame(pk *packet.StartGame) (bool, error) {
 	if err := c.WritePacket(&packet.RequestChunkRadius{ChunkRadius: 16}); err != nil {
 		return false, err
 	}
-	c.logger.Debug("received start_game, expecting chunk_radius_updated", "username", c.clientConn.IdentityData().DisplayName)
+	c.logger.Debug("received start_game, expecting chunk_radius_updated")
 	return false, nil
 }
 
@@ -413,7 +413,7 @@ func (c *Conn) handleStartGame(pk *packet.StartGame) (bool, error) {
 func (c *Conn) handleChunkRadiusUpdated(pk *packet.ChunkRadiusUpdated) (bool, error) {
 	c.expect(packet.IDPlayStatus)
 	c.gameData.ChunkRadius = pk.ChunkRadius
-	c.logger.Debug("received chunk_radius_updated, expecting play_status", "username", c.clientConn.IdentityData().DisplayName)
+	c.logger.Debug("received chunk_radius_updated, expecting play_status")
 	return true, nil
 }
 
@@ -424,6 +424,6 @@ func (c *Conn) handlePlayStatus(_ *packet.PlayStatus) (bool, error) {
 		return false, err
 	}
 	close(c.spawned)
-	c.logger.Debug("received play_status, finalizing spawn sequence", "username", c.clientConn.IdentityData().DisplayName)
+	c.logger.Debug("received play_status, finalizing spawn sequence")
 	return true, nil
 }
