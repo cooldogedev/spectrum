@@ -263,38 +263,44 @@ func (c *Conn) read() (pk any, err error) {
 	case <-c.closed:
 		return nil, net.ErrClosed
 	default:
-		payload, err := c.reader.ReadPacket()
-		if err != nil {
-			return nil, err
-		}
-
-		if payload[0] != packetDecodeNeeded && payload[0] != packetDecodeNotNeeded {
-			return nil, fmt.Errorf("unknown decode byte marker %v", payload[0])
-		}
-
-		decompressed, err := snappy.Decode(nil, payload[1:])
-		if err != nil {
-			return nil, err
-		}
-
-		if payload[0] == packetDecodeNotNeeded {
-			return decompressed, nil
-		}
-
-		buf := bytes.NewBuffer(decompressed)
-		header := &packet.Header{}
-		if err := header.Read(buf); err != nil {
-			return nil, err
-		}
-
-		factory, ok := c.pool[header.PacketID]
-		if !ok {
-			return nil, fmt.Errorf("unknown packet ID %v", header.PacketID)
-		}
-		pk = factory()
-		pk.(packet.Packet).Marshal(c.protocol.NewReader(buf, c.shieldID, false))
-		return pk, nil
 	}
+
+	payload, err := c.reader.ReadPacket()
+	if err != nil {
+		return nil, err
+	}
+
+	if payload[0] != packetDecodeNeeded && payload[0] != packetDecodeNotNeeded {
+		return nil, fmt.Errorf("unknown decode byte marker %v", payload[0])
+	}
+
+	decompressed, err := snappy.Decode(nil, payload[1:])
+	if err != nil {
+		return nil, err
+	}
+
+	if payload[0] == packetDecodeNotNeeded {
+		return decompressed, nil
+	}
+
+	buf := bytes.NewBuffer(decompressed)
+	header := &packet.Header{}
+	if err := header.Read(buf); err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic while decoding packet %v: %v", header.PacketID, r)
+		}
+	}()
+	factory, ok := c.pool[header.PacketID]
+	if !ok {
+		return nil, fmt.Errorf("unknown packet ID %v", header.PacketID)
+	}
+	pk = factory()
+	pk.(packet.Packet).Marshal(c.protocol.NewReader(buf, c.shieldID, false))
+	return pk, nil
 }
 
 // deferPacket defers a packet to be returned later in ReadPacket().
