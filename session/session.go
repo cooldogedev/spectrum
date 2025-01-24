@@ -173,6 +173,7 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 		if err != nil {
 			s.sendMetadata(false)
 			s.serverMu.Unlock()
+			s.processor.ProcessTransferFailure(NewContext(), &s.serverAddr, &addr)
 		}
 	}()
 

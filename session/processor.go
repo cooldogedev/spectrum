@@ -39,6 +39,8 @@ type Processor interface {
 	ProcessClientEncoded(ctx *Context, pk *[]byte)
 	// ProcessPreTransfer is called before transferring the player to a different server.
 	ProcessPreTransfer(ctx *Context, origin *string, target *string)
+	// ProcessTransferFailure is called when the player transfer to a different server fails.
+	ProcessTransferFailure(ctx *Context, origin *string, target *string)
 	// ProcessPostTransfer is called after transferring the player to a different server.
 	ProcessPostTransfer(ctx *Context, origin *string, target *string)
 	// ProcessDisconnection is called when the player disconnects from the proxy.
@@ -51,11 +53,12 @@ type NopProcessor struct{}
 // Ensure that NopProcessor satisfies the Processor interface.
 var _ Processor = NopProcessor{}
 
-func (NopProcessor) ProcessStartGame(_ *Context, _ *minecraft.GameData)   {}
-func (NopProcessor) ProcessServer(_ *Context, _ packet.Packet)            {}
-func (NopProcessor) ProcessServerEncoded(_ *Context, _ *[]byte)           {}
-func (NopProcessor) ProcessClient(_ *Context, _ packet.Packet)            {}
-func (NopProcessor) ProcessClientEncoded(_ *Context, _ *[]byte)           {}
-func (NopProcessor) ProcessPreTransfer(_ *Context, _ *string, _ *string)  {}
-func (NopProcessor) ProcessPostTransfer(_ *Context, _ *string, _ *string) {}
-func (NopProcessor) ProcessDisconnection(_ *Context)                      {}
+func (NopProcessor) ProcessStartGame(_ *Context, _ *minecraft.GameData)      {}
+func (NopProcessor) ProcessServer(_ *Context, _ packet.Packet)               {}
+func (NopProcessor) ProcessServerEncoded(_ *Context, _ *[]byte)              {}
+func (NopProcessor) ProcessClient(_ *Context, _ packet.Packet)               {}
+func (NopProcessor) ProcessClientEncoded(_ *Context, _ *[]byte)              {}
+func (NopProcessor) ProcessPreTransfer(_ *Context, _ *string, _ *string)     {}
+func (NopProcessor) ProcessTransferFailure(_ *Context, _ *string, _ *string) {}
+func (NopProcessor) ProcessPostTransfer(_ *Context, _ *string, _ *string)    {}
+func (NopProcessor) ProcessDisconnection(_ *Context)                         {}
