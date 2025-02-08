@@ -16,7 +16,7 @@ type Opts struct {
 	// SyncProtocol determines the protocol version the proxy should use when communicating with servers.
 	// When enabled, the proxy uses the client's protocol version (minecraft.Protocol) for reading and
 	// writing packets. If disabled, the proxy defaults to using the latest protocol version (minecraft.DefaultProtocol).
-	SyncProtocol bool
+	SyncProtocol bool `yaml:"sync_protocol"`
 	// Token is the authentication token that Spectrum uses to authenticate with servers.
 	Token string `yaml:"token"`
 }
