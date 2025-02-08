@@ -58,7 +58,7 @@ func handleServer(s *Session) {
 				}
 			case packet.Packet:
 				ctx := NewContext()
-				s.processor.ProcessServer(ctx, pk)
+				s.processor.ProcessServer(ctx, &pk)
 				if ctx.Cancelled() {
 					continue
 				}
@@ -200,7 +200,7 @@ func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, pay
 
 	pk := factory()
 	pk.Marshal(s.clientConn.Proto().NewReader(buf, s.shieldID, true))
-	s.processor.ProcessClient(ctx, pk)
+	s.processor.ProcessClient(ctx, &pk)
 	if !ctx.Cancelled() {
 		if s.opts.SyncProtocol {
 			return s.Server().WritePacket(pk)
