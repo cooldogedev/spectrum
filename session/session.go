@@ -289,29 +289,28 @@ func (s *Session) Server() *server.Conn {
 
 // Disconnect sends a packet.Disconnect to the client and closes the session.
 func (s *Session) Disconnect(message string) {
-	select {
-	case <-s.ctx.Done():
-		return
-	default:
-	}
-	s.logger.Debug("disconnecting session", "message", message)
 	_ = s.clientConn.WritePacket(&packet.Disconnect{Message: message})
 	_ = s.Close()
 }
 
 // Close closes the session, including the server and client connections.
 func (s *Session) Close() (err error) {
-	s.once.Do(func() {
-		s.cancelFunc()
-		s.processor.ProcessDisconnection(NewContext())
-		_ = s.clientConn.Close()
-		if s.serverConn != nil {
-			_ = s.serverConn.Close()
-		}
-		identity := s.clientConn.IdentityData()
-		s.registry.RemoveSession(identity.XUID)
-		s.logger.Info("closed session")
-	})
+	select {
+	case <-s.ctx.Done():
+		return errors.New("already closed")
+	default:
+	}
+
+	s.cancelFunc()
+	s.processor.ProcessDisconnection(NewContext())
+	_ = s.clientConn.Close()
+	s.serverMu.RLock()
+	if s.serverConn != nil {
+		_ = s.serverConn.Close()
+	}
+	s.serverMu.RUnlock()
+	s.registry.RemoveSession(s.clientConn.IdentityData().XUID)
+	s.logger.Info("closed session")
 	return
 }
 
