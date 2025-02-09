@@ -15,65 +15,67 @@ import (
 // handleServer continuously reads packets from the server and forwards them to the client.
 func handleServer(s *Session) {
 	defer s.Close()
+loop:
 	for {
 		select {
 		case <-s.ctx.Done():
-			break
+			break loop
 		default:
-			server := s.Server()
-			pk, err := server.ReadPacket()
-			if err != nil {
-				if s.transferring.Load() || server != s.Server() {
-					continue
-				}
+		}
 
-				if err := s.fallback(); err != nil {
-					break
-				}
-				continue
+		server := s.Server()
+		pk, err := server.ReadPacket()
+		if err != nil {
+			if s.transferring.Load() || server != s.Server() {
+				continue loop
 			}
 
-			switch pk := pk.(type) {
-			case *packet2.Latency:
-				s.serverLatency = pk.Latency
-			case *packet2.Transfer:
-				if err := s.Transfer(pk.Addr); err != nil {
-					s.logger.Error("failed to transfer", "err", err)
-				}
-			case packet.Packet:
-				ctx := NewContext()
-				s.processor.ProcessServer(ctx, &pk)
-				if ctx.Cancelled() {
-					continue
-				}
+			if err := s.fallback(); err != nil {
+				break loop
+			}
+			continue loop
+		}
 
-				if s.opts.SyncProtocol {
-					for _, latest := range s.clientConn.Proto().ConvertToLatest(pk, s.clientConn) {
-						s.tracker.handlePacket(latest)
-					}
-				} else {
-					s.tracker.handlePacket(pk)
-				}
+		switch pk := pk.(type) {
+		case *packet2.Latency:
+			s.serverLatency = pk.Latency
+		case *packet2.Transfer:
+			if err := s.Transfer(pk.Addr); err != nil {
+				s.logger.Error("failed to transfer", "err", err)
+			}
+		case packet.Packet:
+			ctx := NewContext()
+			s.processor.ProcessServer(ctx, &pk)
+			if ctx.Cancelled() {
+				continue loop
+			}
 
-				if err := s.clientConn.WritePacket(pk); err != nil {
-					if isErrorLoggable(err) {
-						s.logger.Error("failed to write packet to client", "err", err)
-					}
-					break
+			if s.opts.SyncProtocol {
+				for _, latest := range s.clientConn.Proto().ConvertToLatest(pk, s.clientConn) {
+					s.tracker.handlePacket(latest)
 				}
-			case []byte:
-				ctx := NewContext()
-				s.processor.ProcessServerEncoded(ctx, &pk)
-				if ctx.Cancelled() {
-					continue
-				}
+			} else {
+				s.tracker.handlePacket(pk)
+			}
 
-				if _, err := s.clientConn.Write(pk); err != nil {
-					if isErrorLoggable(err) {
-						s.logger.Error("failed to write raw packet to client", "err", err)
-					}
-					break
+			if err := s.clientConn.WritePacket(pk); err != nil {
+				if isErrorLoggable(err) {
+					s.logger.Error("failed to write packet to client", "err", err)
 				}
+				break loop
+			}
+		case []byte:
+			ctx := NewContext()
+			s.processor.ProcessServerEncoded(ctx, &pk)
+			if ctx.Cancelled() {
+				continue loop
+			}
+
+			if _, err := s.clientConn.Write(pk); err != nil {
+				if isErrorLoggable(err) {
+					s.logger.Error("failed to write raw packet to client", "err", err)
+				}
+				break loop
 			}
 		}
 	}
@@ -84,24 +86,26 @@ func handleClient(s *Session) {
 	defer s.Close()
 	header := &packet.Header{}
 	pool := s.clientConn.Proto().Packets(true)
+loop:
 	for {
 		select {
 		case <-s.ctx.Done():
-			break
+			break loop
 		default:
-			payload, err := s.clientConn.ReadBytes()
-			if err != nil {
-				if isErrorLoggable(err) {
-					s.logger.Error("failed to read packet from client", "err", err)
-				}
-				break
-			}
+		}
 
-			if err := handleClientPacket(s, header, pool, payload); err != nil {
-				s.logger.Error("failed to write packet to server", "err", err)
-				if err := s.fallback(); err != nil {
-					break
-				}
+		payload, err := s.clientConn.ReadBytes()
+		if err != nil {
+			if isErrorLoggable(err) {
+				s.logger.Error("failed to read packet from client", "err", err)
+			}
+			break loop
+		}
+
+		if err := handleClientPacket(s, header, pool, payload); err != nil {
+			s.logger.Error("failed to write packet to server", "err", err)
+			if err := s.fallback(); err != nil {
+				break loop
 			}
 		}
 	}
@@ -116,15 +120,16 @@ func handleLatency(s *Session, interval int64) {
 		_ = s.Close()
 		ticker.Stop()
 	}()
+loop:
 	for {
 		select {
 		case <-s.ctx.Done():
-			break
+			break loop
 		case <-ticker.C:
 			if err := s.Server().WritePacket(&packet2.Latency{Latency: s.clientConn.Latency().Milliseconds() * 2, Timestamp: time.Now().UnixMilli()}); err != nil {
 				s.logger.Error("failed to send latency packet", "err", err)
 				if err := s.fallback(); err != nil {
-					break
+					break loop
 				}
 			}
 		}
