@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"net"
 	"slices"
 	"strings"
 	"time"
@@ -13,40 +12,25 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
-const (
-	errClosedNetworkConn = "closed network connection"
-	errClosedStream      = "closed stream"
-)
-
 // handleServer continuously reads packets from the server and forwards them to the client.
 func handleServer(s *Session) {
 	defer s.Close()
 	for {
 		select {
 		case <-s.ctx.Done():
-			return
+			break
 		default:
 			server := s.Server()
-			if !s.loggedIn {
-				continue
-			}
-
 			pk, err := server.ReadPacket()
 			if err != nil {
 				if s.transferring.Load() || server != s.Server() {
 					continue
 				}
 
-				if !s.closed.Load() {
-					if isErrorLoggable(err) {
-						s.logger.Error("failed to read packet from server", "err", err)
-					}
-
-					if err := s.fallback(); err == nil {
-						continue
-					}
+				if err := s.fallback(); err != nil {
+					break
 				}
-				return
+				continue
 			}
 
 			switch pk := pk.(type) {
@@ -75,7 +59,7 @@ func handleServer(s *Session) {
 					if isErrorLoggable(err) {
 						s.logger.Error("failed to write packet to client", "err", err)
 					}
-					return
+					break
 				}
 			case []byte:
 				ctx := NewContext()
@@ -88,7 +72,7 @@ func handleServer(s *Session) {
 					if isErrorLoggable(err) {
 						s.logger.Error("failed to write raw packet to client", "err", err)
 					}
-					return
+					break
 				}
 			}
 		}
@@ -98,48 +82,33 @@ func handleServer(s *Session) {
 // handleClient continuously reads packets from the client and forwards them to the server.
 func handleClient(s *Session) {
 	defer s.Close()
-
 	header := &packet.Header{}
 	pool := s.clientConn.Proto().Packets(true)
-	var deferredPackets [][]byte
 	for {
 		select {
 		case <-s.ctx.Done():
-			return
+			break
 		default:
 			payload, err := s.clientConn.ReadBytes()
 			if err != nil {
 				if isErrorLoggable(err) {
 					s.logger.Error("failed to read packet from client", "err", err)
 				}
-				return
+				break
 			}
 
-			if !s.loggedIn {
-				deferredPackets = append(deferredPackets, payload)
-				continue
-			}
-
-			if len(deferredPackets) > 0 {
-				for i, deferredPacket := range deferredPackets {
-					if err := handleClientPacket(s, header, pool, deferredPacket); err != nil && isErrorLoggable(err) {
-						s.logger.Error("failed to write deferred packet to server", "err", err)
-					}
-					deferredPackets[i] = nil
-				}
-				deferredPackets = deferredPackets[:0]
-				deferredPackets = nil
-			}
-
-			if err := handleClientPacket(s, header, pool, payload); err != nil && isErrorLoggable(err) {
+			if err := handleClientPacket(s, header, pool, payload); err != nil {
 				s.logger.Error("failed to write packet to server", "err", err)
+				if err := s.fallback(); err != nil {
+					break
+				}
 			}
 		}
 	}
 }
 
 // handleLatency periodically sends the client's current ping and timestamp to the server for latency reporting.
-// Note: The client's latency is derived from half of RakNet's round-trip time (RTT).
+// The client's latency is derived from half of RakNet's round-trip time (RTT).
 // To calculate the total latency, we multiply this value by 2.
 func handleLatency(s *Session, interval int64) {
 	ticker := time.NewTicker(time.Millisecond * time.Duration(interval))
@@ -150,18 +119,13 @@ func handleLatency(s *Session, interval int64) {
 	for {
 		select {
 		case <-s.ctx.Done():
-			return
+			break
 		case <-ticker.C:
-			if !s.loggedIn {
-				continue
-			}
-
-			err := s.Server().WritePacket(&packet2.Latency{
-				Latency:   s.clientConn.Latency().Milliseconds() * 2,
-				Timestamp: time.Now().UnixMilli(),
-			})
-			if err != nil && !s.closed.Load() {
+			if err := s.Server().WritePacket(&packet2.Latency{Latency: s.clientConn.Latency().Milliseconds() * 2, Timestamp: time.Now().UnixMilli()}); err != nil {
 				s.logger.Error("failed to send latency packet", "err", err)
+				if err := s.fallback(); err != nil {
+					break
+				}
 			}
 		}
 	}
@@ -216,5 +180,5 @@ func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, pay
 }
 
 func isErrorLoggable(err error) bool {
-	return !errors.Is(err, net.ErrClosed) && !strings.Contains(err.Error(), errClosedStream) && !strings.Contains(err.Error(), errClosedNetworkConn)
+	return strings.Contains(err.Error(), "closed network connection")
 }
