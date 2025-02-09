@@ -317,6 +317,12 @@ func (s *Session) Close() (err error) {
 // dial dials the specified server address and returns a new server.Conn instance.
 // The provided context is used to manage timeouts and cancellations during the dialing process.
 func (s *Session) dial(ctx context.Context, addr string) (*server.Conn, error) {
+	select {
+	case <-s.ctx.Done():
+		return nil, errors.New("session is closed")
+	default:
+	}
+
 	conn, err := s.transport.Dial(ctx, addr)
 	if err != nil {
 		return nil, err
@@ -333,12 +339,6 @@ func (s *Session) dial(ctx context.Context, addr string) (*server.Conn, error) {
 
 // fallback attempts to transfer the session to a fallback server provided by the discovery.
 func (s *Session) fallback() (err error) {
-	select {
-	case <-s.ctx.Done():
-		return errors.New("already closed")
-	default:
-	}
-
 	addr, err := s.discovery.DiscoverFallback(s.clientConn)
 	if err != nil {
 		return err
