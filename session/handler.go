@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 	"time"
 
 	packet2 "github.com/cooldogedev/spectrum/server/packet"
@@ -41,7 +40,7 @@ loop:
 			s.serverLatency = pk.Latency
 		case *packet2.Transfer:
 			if err := s.Transfer(pk.Addr); err != nil {
-				s.logger.Error("failed to transfer", "err", err)
+				logError(s, "failed to transfer", "err", err)
 			}
 		case packet.Packet:
 			ctx := NewContext()
@@ -59,9 +58,7 @@ loop:
 			}
 
 			if err := s.clientConn.WritePacket(pk); err != nil {
-				if isErrorLoggable(err) {
-					s.logger.Error("failed to write packet to client", "err", err)
-				}
+				logError(s, "failed to write packet to client", "err", err)
 				break loop
 			}
 		case []byte:
@@ -72,9 +69,7 @@ loop:
 			}
 
 			if _, err := s.clientConn.Write(pk); err != nil {
-				if isErrorLoggable(err) {
-					s.logger.Error("failed to write raw packet to client", "err", err)
-				}
+				logError(s, "failed to write raw packet to client", "err", err)
 				break loop
 			}
 		}
@@ -96,14 +91,12 @@ loop:
 
 		payload, err := s.clientConn.ReadBytes()
 		if err != nil {
-			if isErrorLoggable(err) {
-				s.logger.Error("failed to read packet from client", "err", err)
-			}
+			logError(s, "failed to read packet from client", "err", err)
 			break loop
 		}
 
 		if err := handleClientPacket(s, header, pool, payload); err != nil {
-			s.logger.Error("failed to write packet to server", "err", err)
+			logError(s, "failed to write packet to server", "err", err)
 			if err := s.fallback(); err != nil {
 				break loop
 			}
@@ -127,7 +120,7 @@ loop:
 			break loop
 		case <-ticker.C:
 			if err := s.Server().WritePacket(&packet2.Latency{Latency: s.clientConn.Latency().Milliseconds() * 2, Timestamp: time.Now().UnixMilli()}); err != nil {
-				s.logger.Error("failed to send latency packet", "err", err)
+				logError(s, "failed to write latency packet", "err", err)
 				if err := s.fallback(); err != nil {
 					break loop
 				}
@@ -139,10 +132,6 @@ loop:
 // handleClientPacket processes and forwards the provided packet from the client to the server.
 func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, payload []byte) (err error) {
 	ctx := NewContext()
-	if s.transferring.Load() {
-		ctx.Cancel()
-	}
-
 	buf := bytes.NewBuffer(payload)
 	if err := header.Read(buf); err != nil {
 		return errors.New("failed to decode header")
@@ -184,6 +173,11 @@ func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, pay
 	return
 }
 
-func isErrorLoggable(err error) bool {
-	return strings.Contains(err.Error(), "closed network connection")
+func logError(s *Session, msg string, args ...any) {
+	select {
+	case <-s.ctx.Done():
+		return
+	default:
+	}
+	s.logger.Error(msg, args)
 }

@@ -48,9 +48,9 @@ type Session struct {
 }
 
 // NewSession creates a new Session instance using the provided minecraft.Conn.
-func NewSession(clientConn *minecraft.Conn, logger *slog.Logger, registry *Registry, discovery server.Discovery, opts util.Opts, transport transport.Transport) *Session {
+func NewSession(clientConn interface{}, logger *slog.Logger, registry *Registry, discovery server.Discovery, opts util.Opts, transport transport.Transport) *Session {
 	s := &Session{
-		clientConn: clientConn,
+		clientConn: clientConn.(*minecraft.Conn),
 
 		logger:   logger,
 		registry: registry,
@@ -63,7 +63,12 @@ func NewSession(clientConn *minecraft.Conn, logger *slog.Logger, registry *Regis
 		processor: NopProcessor{},
 		tracker:   newTracker(),
 	}
-	s.ctx, s.cancelFunc = context.WithCancel(context.Background())
+
+	if c, ok := clientConn.(interface{ Context() context.Context }); ok {
+		s.ctx, s.cancelFunc = context.WithCancel(c.Context())
+	} else {
+		s.ctx, s.cancelFunc = context.WithCancel(context.Background())
+	}
 	return s
 }
 
@@ -339,6 +344,12 @@ func (s *Session) dial(ctx context.Context, addr string) (*server.Conn, error) {
 
 // fallback attempts to transfer the session to a fallback server provided by the discovery.
 func (s *Session) fallback() (err error) {
+	select {
+	case <-s.ctx.Done():
+		return
+	default:
+	}
+
 	addr, err := s.discovery.DiscoverFallback(s.clientConn)
 	if err != nil {
 		return err
