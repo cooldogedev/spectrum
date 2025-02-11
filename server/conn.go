@@ -345,6 +345,8 @@ func (c *Conn) handlePacket(pk packet.Packet) (bool, error) {
 		return c.handleConnectionResponse(pk)
 	case *packet.StartGame:
 		return c.handleStartGame(pk)
+	case *packet.ItemRegistry:
+		return c.handleItemRegistry(pk)
 	case *packet.ChunkRadiusUpdated:
 		return c.handleChunkRadiusUpdated(pk)
 	case *packet.PlayStatus:
@@ -366,7 +368,7 @@ func (c *Conn) handleConnectionResponse(pk *packet2.ConnectionResponse) (bool, e
 
 // handleStartGame handles the StartGame packet.
 func (c *Conn) handleStartGame(pk *packet.StartGame) (bool, error) {
-	c.expect(packet.IDChunkRadiusUpdated)
+	c.expect(packet.IDItemRegistry)
 	c.gameData = minecraft.GameData{
 		Difficulty:                   pk.Difficulty,
 		WorldName:                    pk.WorldName,
@@ -389,7 +391,6 @@ func (c *Conn) handleStartGame(pk *packet.StartGame) (bool, error) {
 		Time:                         pk.Time,
 		ServerBlockStateChecksum:     pk.ServerBlockStateChecksum,
 		CustomBlocks:                 pk.Blocks,
-		Items:                        pk.Items,
 		PlayerMovementSettings:       pk.PlayerMovementSettings,
 		WorldGameMode:                pk.WorldGameMode,
 		Hardcore:                     pk.Hardcore,
@@ -401,6 +402,14 @@ func (c *Conn) handleStartGame(pk *packet.StartGame) (bool, error) {
 		Experiments:                  pk.Experiments,
 		UseBlockNetworkIDHashes:      pk.UseBlockNetworkIDHashes,
 	}
+	c.logger.Debug("received start_game, expecting item_registry")
+	return false, nil
+}
+
+// handleItemRegistry handles the ItemRegistry packet.
+func (c *Conn) handleItemRegistry(pk *packet.ItemRegistry) (bool, error) {
+	c.expect(packet.IDChunkRadiusUpdated)
+	c.gameData.Items = pk.Items
 	for _, item := range pk.Items {
 		if item.Name == "minecraft:shield" {
 			c.shieldID = int32(item.RuntimeID)
@@ -410,8 +419,8 @@ func (c *Conn) handleStartGame(pk *packet.StartGame) (bool, error) {
 	if err := c.WritePacket(&packet.RequestChunkRadius{ChunkRadius: 16}); err != nil {
 		return false, err
 	}
-	c.logger.Debug("received start_game, expecting chunk_radius_updated")
-	return false, nil
+	c.logger.Debug("received item_registry, expecting chunk_radius_updated")
+	return true, nil
 }
 
 // handleChunkRadiusUpdated handles the first ChunkRadiusUpdated packet, which updates the initial chunk
