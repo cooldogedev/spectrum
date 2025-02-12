@@ -179,5 +179,5 @@ func logError(s *Session, msg string, args ...any) {
 		return
 	default:
 	}
-	s.logger.Error(msg, args)
+	s.logger.Error(msg, args...)
 }
