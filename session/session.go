@@ -294,6 +294,7 @@ func (s *Session) Server() *server.Conn {
 
 // Disconnect sends a packet.Disconnect to the client and closes the session.
 func (s *Session) Disconnect(message string) {
+	s.logger.Debug("disconnecting", "message", message)
 	_ = s.clientConn.WritePacket(&packet.Disconnect{Message: message})
 	_ = s.Close()
 }
