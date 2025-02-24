@@ -32,7 +32,7 @@ Spectrum introduces Discovery, a method for server determination when players jo
 The `Processor` interface in Spectrum handles incoming and outgoing packets within sessions, enabling custom filtering and manipulation. This functionality supports implementing anti-cheat measures and other security features. Downstream servers are responsible for prefixing packets to indicate decoding necessity, as per Spectrum protocol specifications.
 
 ## Why Spectrum?
-- **Protocol Innovation**: Utilizes [Spectral](https://github.com/cooldogedev/spectral) and [QUIC](https://datatracker.ietf.org/doc/html/rfc9000) for enhanced reliability and performance, unlike traditional proxies relying on RakNet and standard Minecraft protocol.
+- **Protocol Innovation**: Utilizes [Spectral](https://github.com/cooldogedev/spectral), [QUIC](https://datatracker.ietf.org/doc/html/rfc9000), and [KCP](https://github.com/skywind3000/kcp/blob/master/README.en.md) for enhanced reliability and performance, unlike traditional proxies relying on RakNet and standard Minecraft protocol.
 
 - **Efficient Packet Handling**: Maintains high throughput by bypassing unnecessary packet decoding, optimizing data transmission and reducing latency.
 
