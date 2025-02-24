@@ -17,7 +17,7 @@ func NewKCP(logger *slog.Logger) *KCP {
 
 // Dial ...
 func (k *KCP) Dial(_ context.Context, addr string) (io.ReadWriteCloser, error) {
-	conn, err := kcp.Dial(addr)
+	conn, err := kcp.DialWithOptions(addr, nil, 10, 3)
 	if err != nil {
 		return nil, err
 	}
