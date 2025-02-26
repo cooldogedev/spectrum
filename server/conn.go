@@ -80,6 +80,8 @@ func NewConn(conn io.ReadWriteCloser, client *minecraft.Conn, logger *slog.Logge
 			select {
 			case <-c.closed:
 				return
+			case <-c.connected:
+				return
 			default:
 				payload, err := c.read()
 				if err != nil {
