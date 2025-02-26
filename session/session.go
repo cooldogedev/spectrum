@@ -110,11 +110,6 @@ func (s *Session) LoginContext(ctx context.Context) (err error) {
 		return err
 	}
 
-	if err := serverConn.SpawnContext(ctx); err != nil {
-		s.logger.Debug("spawn sequence failed", "err", err)
-		return err
-	}
-
 	gameData := serverConn.GameData()
 	s.processor.ProcessStartGame(NewContext(), &gameData)
 	if err := s.clientConn.StartGame(gameData); err != nil {
@@ -185,12 +180,6 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 	if err := conn.ConnectContext(ctx); err != nil {
 		_ = conn.Close()
 		s.logger.Debug("connection sequence failed", "err", err)
-		return err
-	}
-
-	if err := conn.SpawnContext(ctx); err != nil {
-		_ = conn.Close()
-		s.logger.Debug("spawn sequence failed", "err", err)
 		return err
 	}
 
