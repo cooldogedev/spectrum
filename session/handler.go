@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	packet2 "github.com/cooldogedev/spectrum/server/packet"
@@ -40,7 +41,7 @@ loop:
 			s.serverLatency = pk.Latency
 		case *packet2.Transfer:
 			if err := s.Transfer(pk.Addr); err != nil {
-				logError(s, "failed to transfer", "err", err)
+				logError(s, "failed to transfer", err)
 			}
 		case packet.Packet:
 			ctx := NewContext()
@@ -58,7 +59,7 @@ loop:
 			}
 
 			if err := s.clientConn.WritePacket(pk); err != nil {
-				logError(s, "failed to write packet to client", "err", err)
+				logError(s, "failed to write packet to client", err)
 				break loop
 			}
 		case []byte:
@@ -69,7 +70,7 @@ loop:
 			}
 
 			if _, err := s.clientConn.Write(pk); err != nil {
-				logError(s, "failed to write raw packet to client", "err", err)
+				logError(s, "failed to write raw packet to client", err)
 				break loop
 			}
 		}
@@ -91,12 +92,12 @@ loop:
 
 		payload, err := s.clientConn.ReadBytes()
 		if err != nil {
-			logError(s, "failed to read packet from client", "err", err)
+			logError(s, "failed to read packet from client", err)
 			break loop
 		}
 
 		if err := handleClientPacket(s, header, pool, payload); err != nil {
-			logError(s, "failed to write packet to server", "err", err)
+			logError(s, "failed to write packet to server", err)
 			if err := s.fallback(); err != nil {
 				break loop
 			}
@@ -120,7 +121,7 @@ loop:
 			break loop
 		case <-ticker.C:
 			if err := s.Server().WritePacket(&packet2.Latency{Latency: s.clientConn.Latency().Milliseconds() * 2, Timestamp: time.Now().UnixMilli()}); err != nil {
-				logError(s, "failed to write latency packet", "err", err)
+				logError(s, "failed to write latency packet", err)
 				if err := s.fallback(); err != nil {
 					break loop
 				}
@@ -173,11 +174,14 @@ func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, pay
 	return
 }
 
-func logError(s *Session, msg string, args ...any) {
+func logError(s *Session, msg string, err error) {
 	select {
 	case <-s.ctx.Done():
 		return
 	default:
 	}
-	s.logger.Error(msg, args...)
+
+	if !strings.Contains(err.Error(), "use of closed network connection") {
+		s.logger.Error(msg, "err", err)
+	}
 }
