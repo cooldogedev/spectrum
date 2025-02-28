@@ -160,7 +160,7 @@ func (a *API) handle(conn net.Conn) {
 
 			if h, ok := a.handlers[pk.ID()]; ok {
 				h(c, pk)
-				return
+				continue
 			}
 			a.logger.Error("received an unhandled packet", "addr", identifier, "pid", pk.ID())
 		}
