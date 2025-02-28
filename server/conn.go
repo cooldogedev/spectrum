@@ -52,7 +52,6 @@ type Conn struct {
 	header          *packet.Header
 
 	connected chan struct{}
-	spawned   chan struct{}
 	closed    chan struct{}
 }
 
@@ -74,7 +73,6 @@ func NewConn(conn io.ReadWriteCloser, client *minecraft.Conn, logger *slog.Logge
 		header:   &packet.Header{},
 
 		connected: make(chan struct{}),
-		spawned:   make(chan struct{}),
 		closed:    make(chan struct{}),
 	}
 	go func() {
@@ -82,7 +80,7 @@ func NewConn(conn io.ReadWriteCloser, client *minecraft.Conn, logger *slog.Logge
 			select {
 			case <-c.closed:
 				return
-			case <-c.spawned:
+			case <-c.connected:
 				return
 			default:
 				payload, err := c.read()
@@ -197,33 +195,6 @@ func (c *Conn) ConnectContext(ctx context.Context) error {
 	}
 }
 
-// Spawn initiates the spawning sequence with a default timeout of 1 minute.
-func (c *Conn) Spawn() error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	return c.SpawnContext(ctx)
-}
-
-// SpawnTimeout initiates the spawning sequence with the specified timeout duration.
-func (c *Conn) SpawnTimeout(duration time.Duration) error {
-	ctx, cancel := context.WithTimeout(context.Background(), duration)
-	defer cancel()
-	return c.SpawnContext(ctx)
-}
-
-// SpawnContext initiates the spawning sequence using the provided context for cancellation.
-func (c *Conn) SpawnContext(ctx context.Context) error {
-	c.expect(packet.IDStartGame)
-	select {
-	case <-c.closed:
-		return net.ErrClosed
-	case <-ctx.Done():
-		return context.Cause(ctx)
-	case <-c.spawned:
-		return nil
-	}
-}
-
 // Conn returns the underlying connection.
 // Direct access to the underlying connection through this method is
 // strongly discouraged due to the potential for unpredictable behavior.
@@ -308,7 +279,7 @@ func (c *Conn) deferPacket(pk any) {
 	c.deferredPackets = append(c.deferredPackets, pk)
 }
 
-// expect stores packet IDs that will be read and handled before finalizing the spawning sequence.
+// expect stores packet IDs that will be read and handled before finalizing the connection sequence.
 func (c *Conn) expect(ids ...uint32) {
 	c.expectedIds.Store(ids)
 }
@@ -338,7 +309,7 @@ func (c *Conn) sendConnectionRequest() error {
 	return nil
 }
 
-// handlePacket handles an expected packet that was received before the spawning sequence finalization.
+// handlePacket handles an expected packet that was received before the connection sequence finalization.
 func (c *Conn) handlePacket(pk packet.Packet) (bool, error) {
 	switch pk := pk.(type) {
 	case *packet2.ConnectionResponse:
@@ -356,12 +327,11 @@ func (c *Conn) handlePacket(pk packet.Packet) (bool, error) {
 	}
 }
 
-// handleConnectionResponse handles the ConnectionResponse, which is the final packet in the connection sequence
-// it signals that we may proceed with the spawning sequence.
+// handleConnectionResponse handles the ConnectionResponse packet.
 func (c *Conn) handleConnectionResponse(pk *packet2.ConnectionResponse) (bool, error) {
+	c.expect(packet.IDStartGame)
 	c.runtimeID = pk.RuntimeID
 	c.uniqueID = pk.UniqueID
-	close(c.connected)
 	c.logger.Debug("received connection_response, expecting start_game")
 	return false, nil
 }
@@ -432,13 +402,13 @@ func (c *Conn) handleChunkRadiusUpdated(pk *packet.ChunkRadiusUpdated) (bool, er
 	return true, nil
 }
 
-// handlePlayStatus handles the first PlayStatus packet. It is the final packet in the spawning sequence,
-// it responds to the server with a packet.SetLocalPlayerAsInitialised to finalize the spawning sequence and spawn the player.
+// handlePlayStatus handles the first PlayStatus packet. It is the final packet in the connection sequence,
+// it responds to the server with a packet.SetLocalPlayerAsInitialised to finalize the connection sequence and spawn the player.
 func (c *Conn) handlePlayStatus(_ *packet.PlayStatus) (bool, error) {
 	if err := c.WritePacket(&packet.SetLocalPlayerAsInitialised{EntityRuntimeID: c.runtimeID}); err != nil {
 		return false, err
 	}
-	close(c.spawned)
-	c.logger.Debug("received play_status, finalizing spawn sequence")
+	close(c.connected)
+	c.logger.Debug("received play_status, finalizing connection sequence")
 	return true, nil
 }

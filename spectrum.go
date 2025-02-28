@@ -83,7 +83,7 @@ func (s *Spectrum) Accept() (*session.Session, error) {
 			}
 		}()
 	}
-	logger.Debug("accepted session")
+	logger.Info("accepted session")
 	return newSession, nil
 }
 
