@@ -48,9 +48,9 @@ type Session struct {
 }
 
 // NewSession creates a new Session instance using the provided minecraft.Conn.
-func NewSession(clientConn interface{}, logger *slog.Logger, registry *Registry, discovery server.Discovery, opts util.Opts, transport transport.Transport) *Session {
+func NewSession(clientConn *minecraft.Conn, logger *slog.Logger, registry *Registry, discovery server.Discovery, opts util.Opts, transport transport.Transport) *Session {
 	s := &Session{
-		clientConn: clientConn.(*minecraft.Conn),
+		clientConn: clientConn,
 
 		logger:   logger,
 		registry: registry,
@@ -63,12 +63,7 @@ func NewSession(clientConn interface{}, logger *slog.Logger, registry *Registry,
 		processor: NopProcessor{},
 		tracker:   newTracker(),
 	}
-
-	if c, ok := clientConn.(interface{ Context() context.Context }); ok {
-		s.ctx, s.cancelFunc = context.WithCancel(c.Context())
-	} else {
-		s.ctx, s.cancelFunc = context.WithCancel(context.Background())
-	}
+	s.ctx, s.cancelFunc = context.WithCancel(context.Background())
 	return s
 }
 
