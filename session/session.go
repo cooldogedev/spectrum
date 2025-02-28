@@ -20,13 +20,14 @@ import (
 // Session represents a player session within the proxy, managing client and server interactions,
 // including transfers, fallbacks, and tracking various session states.
 type Session struct {
-	clientConn *minecraft.Conn
-	shieldID   int32
+	ctx        context.Context
+	cancelFunc context.CancelFunc
 
-	serverAddr    string
-	serverConn    *server.Conn
-	serverLatency int64
-	serverMu      sync.RWMutex
+	clientConn *minecraft.Conn
+
+	serverAddr string
+	serverConn *server.Conn
+	serverMu   sync.RWMutex
 
 	logger   *slog.Logger
 	registry *Registry
@@ -39,12 +40,8 @@ type Session struct {
 	processor Processor
 	tracker   *tracker
 
-	ctx        context.Context
-	cancelFunc context.CancelFunc
-
+	latency      atomic.Int64
 	transferring atomic.Bool
-	closed       atomic.Bool
-	once         sync.Once
 }
 
 // NewSession creates a new Session instance using the provided minecraft.Conn.
@@ -114,7 +111,6 @@ func (s *Session) LoginContext(ctx context.Context) (err error) {
 	go handleServer(s)
 	go handleClient(s)
 	go handleLatency(s, s.opts.LatencyInterval)
-	s.shieldID = serverConn.ShieldID()
 	s.registry.AddSession(identityData.XUID, s)
 	s.logger.Info("logged in session")
 	return
@@ -258,10 +254,10 @@ func (s *Session) SetProcessor(processor Processor) {
 }
 
 // Latency returns the total latency experienced by the session, combining client and server latencies.
-// Note: The client's latency is derived from half of RakNet's round-trip time (RTT).
+// The client's latency is derived from half of RakNet's round-trip time (RTT).
 // To calculate the total latency, we multiply this value by 2.
 func (s *Session) Latency() int64 {
-	return (s.clientConn.Latency().Milliseconds() * 2) + s.serverLatency
+	return (s.clientConn.Latency().Milliseconds() * 2) + s.latency.Load()
 }
 
 // Client returns the client connection.

@@ -38,7 +38,7 @@ loop:
 
 		switch pk := pk.(type) {
 		case *packet2.Latency:
-			s.serverLatency = pk.Latency
+			s.latency.Store(pk.Latency)
 		case *packet2.Transfer:
 			if err := s.Transfer(pk.Addr); err != nil {
 				logError(s, "failed to transfer", err)
@@ -82,6 +82,14 @@ func handleClient(s *Session) {
 	defer s.Close()
 	header := &packet.Header{}
 	pool := s.clientConn.Proto().Packets(true)
+	var shieldID int32
+	for _, item := range s.clientConn.GameData().Items {
+		if item.Name == "minecraft:shield" {
+			shieldID = int32(item.RuntimeID)
+			break
+		}
+	}
+
 loop:
 	for {
 		select {
@@ -96,7 +104,7 @@ loop:
 			break loop
 		}
 
-		if err := handleClientPacket(s, header, pool, payload); err != nil {
+		if err := handleClientPacket(s, header, pool, shieldID, payload); err != nil {
 			logError(s, "failed to write packet to server", err)
 			if err := s.fallback(); err != nil {
 				break loop
@@ -131,7 +139,7 @@ loop:
 }
 
 // handleClientPacket processes and forwards the provided packet from the client to the server.
-func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, payload []byte) (err error) {
+func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, shieldID int32, payload []byte) (err error) {
 	ctx := NewContext()
 	buf := bytes.NewBuffer(payload)
 	if err := header.Read(buf); err != nil {
@@ -158,7 +166,7 @@ func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, pay
 	}
 
 	pk := factory()
-	pk.Marshal(s.clientConn.Proto().NewReader(buf, s.shieldID, true))
+	pk.Marshal(s.clientConn.Proto().NewReader(buf, shieldID, true))
 	s.processor.ProcessClient(ctx, &pk)
 	if !ctx.Cancelled() {
 		if s.opts.SyncProtocol {
