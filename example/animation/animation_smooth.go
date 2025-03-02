@@ -20,8 +20,8 @@ type smoothProcessor struct {
 	consumer func(mgl32.Vec3, float32)
 }
 
-func (p *smoothProcessor) ProcessClient(_ *session.Context, pk packet.Packet) {
-	if pk, ok := pk.(*packet.PlayerAuthInput); ok {
+func (p *smoothProcessor) ProcessClient(_ *session.Context, pk *packet.Packet) {
+	if pk, ok := (*pk).(*packet.PlayerAuthInput); ok {
 		p.consumer(pk.Position.Add(mgl32.Vec3{0, 1, 0}), pk.HeadYaw)
 	}
 }
