@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"sync/atomic"
@@ -21,9 +22,9 @@ import (
 // including transfers, fallbacks, and tracking various session states.
 type Session struct {
 	ctx        context.Context
-	cancelFunc context.CancelFunc
+	cancelFunc context.CancelCauseFunc
 
-	clientConn *minecraft.Conn
+	client *minecraft.Conn
 
 	serverAddr string
 	serverConn *server.Conn
@@ -42,12 +43,13 @@ type Session struct {
 
 	latency      atomic.Int64
 	transferring atomic.Bool
+	once         sync.Once
 }
 
 // NewSession creates a new Session instance using the provided minecraft.Conn.
-func NewSession(clientConn *minecraft.Conn, logger *slog.Logger, registry *Registry, discovery server.Discovery, opts util.Opts, transport transport.Transport) *Session {
+func NewSession(client *minecraft.Conn, logger *slog.Logger, registry *Registry, discovery server.Discovery, opts util.Opts, transport transport.Transport) *Session {
 	s := &Session{
-		clientConn: clientConn,
+		client: client,
 
 		logger:   logger,
 		registry: registry,
@@ -60,7 +62,7 @@ func NewSession(clientConn *minecraft.Conn, logger *slog.Logger, registry *Regis
 		processor: NopProcessor{},
 		tracker:   newTracker(),
 	}
-	s.ctx, s.cancelFunc = context.WithCancel(context.Background())
+	s.ctx, s.cancelFunc = context.WithCancelCause(client.Context())
 	return s
 }
 
@@ -82,8 +84,8 @@ func (s *Session) LoginTimeout(duration time.Duration) (err error) {
 // establishing a connection, and spawning the player in the game. The process is performed
 // using the provided context for cancellation.
 func (s *Session) LoginContext(ctx context.Context) (err error) {
-	identityData := s.clientConn.IdentityData()
-	serverAddr, err := s.discovery.Discover(s.clientConn)
+	identityData := s.client.IdentityData()
+	serverAddr, err := s.discovery.Discover(s.client)
 	if err != nil {
 		s.logger.Debug("discovery failed", "err", err)
 		return err
@@ -104,7 +106,7 @@ func (s *Session) LoginContext(ctx context.Context) (err error) {
 
 	gameData := serverConn.GameData()
 	s.processor.ProcessStartGame(NewContext(), &gameData)
-	if err := s.clientConn.StartGame(gameData); err != nil {
+	if err := s.client.StartGame(gameData); err != nil {
 		s.logger.Debug("startgame sequence failed", "err", err)
 		return err
 	}
@@ -169,22 +171,21 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 
 	s.sendMetadata(true)
 	if err := conn.ConnectContext(ctx); err != nil {
-		_ = conn.Close()
+		conn.CloseWithError(fmt.Errorf("connection sequence failed: %w", err))
 		s.logger.Debug("connection sequence failed", "err", err)
 		return err
 	}
 
 	_ = s.serverConn.Close()
 	serverGameData := conn.GameData()
-	s.animation.Play(s.clientConn, serverGameData)
-
+	s.animation.Play(s.client, serverGameData)
 	chunk := emptyChunk(serverGameData.Dimension)
 	pos := serverGameData.PlayerPosition
 	chunkX := int32(pos.X()) >> 4
 	chunkZ := int32(pos.Z()) >> 4
 	for x := chunkX - 4; x <= chunkX+4; x++ {
 		for z := chunkZ - 4; z <= chunkZ+4; z++ {
-			_ = s.clientConn.WritePacket(&packet.LevelChunk{
+			_ = s.client.WritePacket(&packet.LevelChunk{
 				Dimension:     serverGameData.Dimension,
 				Position:      protocol.ChunkPos{x, z},
 				SubChunkCount: 1,
@@ -192,29 +193,21 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 			})
 		}
 	}
-
-	_ = s.clientConn.Flush()
-	s.tracker.clearEffects(s)
-	s.tracker.clearEntities(s)
-	s.tracker.clearBossBars(s)
-	s.tracker.clearPlayers(s)
-	s.tracker.clearScoreboards(s)
-
-	_ = s.clientConn.WritePacket(&packet.MovePlayer{
+	s.tracker.clearAll(s)
+	_ = s.client.WritePacket(&packet.MovePlayer{
 		EntityRuntimeID: serverGameData.EntityRuntimeID,
 		Position:        serverGameData.PlayerPosition,
 		Pitch:           serverGameData.Pitch,
 		Yaw:             serverGameData.Yaw,
 		Mode:            packet.MoveModeReset,
 	})
-	_ = s.clientConn.WritePacket(&packet.LevelEvent{EventType: packet.LevelEventStopRaining, EventData: 10_000})
-	_ = s.clientConn.WritePacket(&packet.LevelEvent{EventType: packet.LevelEventStopThunderstorm})
-	_ = s.clientConn.WritePacket(&packet.SetDifficulty{Difficulty: uint32(serverGameData.Difficulty)})
-	_ = s.clientConn.WritePacket(&packet.SetPlayerGameType{GameType: serverGameData.PlayerGameMode})
-	_ = s.clientConn.WritePacket(&packet.GameRulesChanged{GameRules: serverGameData.GameRules})
-
+	_ = s.client.WritePacket(&packet.LevelEvent{EventType: packet.LevelEventStopRaining, EventData: 10_000})
+	_ = s.client.WritePacket(&packet.LevelEvent{EventType: packet.LevelEventStopThunderstorm})
+	_ = s.client.WritePacket(&packet.SetDifficulty{Difficulty: uint32(serverGameData.Difficulty)})
+	_ = s.client.WritePacket(&packet.SetPlayerGameType{GameType: serverGameData.PlayerGameMode})
+	_ = s.client.WritePacket(&packet.GameRulesChanged{GameRules: serverGameData.GameRules})
 	origin := s.serverAddr
-	s.animation.Clear(s.clientConn, serverGameData)
+	s.animation.Clear(s.client, serverGameData)
 	s.serverAddr = addr
 	s.serverConn = conn
 	s.serverMu.Unlock()
@@ -257,12 +250,12 @@ func (s *Session) SetProcessor(processor Processor) {
 // The client's latency is derived from half of RakNet's round-trip time (RTT).
 // To calculate the total latency, we multiply this value by 2.
 func (s *Session) Latency() int64 {
-	return (s.clientConn.Latency().Milliseconds() * 2) + s.latency.Load()
+	return (s.client.Latency().Milliseconds() * 2) + s.latency.Load()
 }
 
 // Client returns the client connection.
 func (s *Session) Client() *minecraft.Conn {
-	return s.clientConn
+	return s.client
 }
 
 // Server returns the current server connection.
@@ -272,32 +265,36 @@ func (s *Session) Server() *server.Conn {
 	return s.serverConn
 }
 
+// Context returns the connection's context. The context is canceled when the session is closed,
+// allowing for cancellation of operations that are tied to the lifecycle of the session.
+func (s *Session) Context() context.Context {
+	return s.ctx
+}
+
 // Disconnect sends a packet.Disconnect to the client and closes the session.
 func (s *Session) Disconnect(message string) {
-	s.logger.Debug("disconnecting", "message", message)
-	_ = s.clientConn.WritePacket(&packet.Disconnect{Message: message})
-	_ = s.Close()
+	s.CloseWithError(errors.New(message))
 }
 
 // Close closes the session, including the server and client connections.
 func (s *Session) Close() (err error) {
-	select {
-	case <-s.ctx.Done():
-		return errors.New("already closed")
-	default:
-	}
+	s.CloseWithError(errors.New("closed by application"))
+	return nil
+}
 
-	s.cancelFunc()
-	s.processor.ProcessDisconnection(NewContext())
-	_ = s.clientConn.Close()
-	s.serverMu.RLock()
-	if s.serverConn != nil {
-		_ = s.serverConn.Close()
-	}
-	s.serverMu.RUnlock()
-	s.registry.RemoveSession(s.clientConn.IdentityData().XUID)
-	s.logger.Info("closed session")
-	return
+func (s *Session) CloseWithError(err error) {
+	s.once.Do(func() {
+		_ = s.client.WritePacket(&packet.Disconnect{Message: err.Error()})
+		_ = s.client.Close()
+		s.processor.ProcessDisconnection(NewContext())
+		s.serverMu.RLock()
+		if s.serverConn != nil {
+			s.serverConn.CloseWithError(err)
+		}
+		s.serverMu.RUnlock()
+		s.registry.RemoveSession(s.client.IdentityData().XUID)
+		s.logger.Info("closed session")
+	})
 }
 
 // dial dials the specified server address and returns a new server.Conn instance.
@@ -313,34 +310,26 @@ func (s *Session) dial(ctx context.Context, addr string) (*server.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	var proto minecraft.Protocol
-	if s.opts.SyncProtocol {
-		proto = s.clientConn.Proto()
-	} else {
-		proto = minecraft.DefaultProtocol
-	}
-	return server.NewConn(conn, s.clientConn, s.logger.With("addr", addr), proto, s.opts.Token), nil
+	return server.NewConn(conn, s.client, s.logger.With("addr", addr), s.opts.SyncProtocol, s.opts.Token), nil
 }
 
 // fallback attempts to transfer the session to a fallback server provided by the discovery.
 func (s *Session) fallback() (err error) {
 	select {
 	case <-s.ctx.Done():
-		return
+		return context.Cause(s.ctx)
 	default:
 	}
 
-	addr, err := s.discovery.DiscoverFallback(s.clientConn)
+	addr, err := s.discovery.DiscoverFallback(s.client)
 	if err != nil {
 		return err
 	}
 
 	if err := s.Transfer(addr); err != nil {
-		s.logger.Debug("failed to transfer session to a fallback server", "addr", addr, "err", err)
 		return err
 	}
-	s.logger.Debug("transferred session to a fallback server", "addr", addr)
+	s.logger.Info("transferred session to a fallback server", "addr", addr)
 	return
 }
 
@@ -353,8 +342,8 @@ func (s *Session) sendMetadata(noAI bool) {
 	}
 	metadata.SetFlag(protocol.EntityDataKeyFlags, protocol.EntityDataFlagBreathing)
 	metadata.SetFlag(protocol.EntityDataKeyFlags, protocol.EntityDataFlagHasGravity)
-	_ = s.clientConn.WritePacket(&packet.SetActorData{
-		EntityRuntimeID: s.clientConn.GameData().EntityRuntimeID,
+	_ = s.client.WritePacket(&packet.SetActorData{
+		EntityRuntimeID: s.client.GameData().EntityRuntimeID,
 		EntityMetadata:  metadata,
 	})
 }

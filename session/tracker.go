@@ -1,6 +1,8 @@
 package session
 
 import (
+	"sync"
+
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 	"github.com/scylladb/go-set/b16set"
@@ -15,6 +17,7 @@ type tracker struct {
 	entities    *i64set.Set
 	players     *b16set.Set
 	scoreboards *strset.Set
+	mu          sync.Mutex
 }
 
 func newTracker() *tracker {
@@ -28,6 +31,8 @@ func newTracker() *tracker {
 }
 
 func (t *tracker) handlePacket(pk packet.Packet) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	switch pk := pk.(type) {
 	case *packet.AddActor:
 		t.entities.Add(pk.EntityUniqueID)
@@ -62,9 +67,19 @@ func (t *tracker) handlePacket(pk packet.Packet) {
 	}
 }
 
+func (t *tracker) clearAll(s *Session) {
+	t.mu.Lock()
+	t.clearEffects(s)
+	t.clearEntities(s)
+	t.clearBossBars(s)
+	t.clearPlayers(s)
+	t.clearScoreboards(s)
+	t.mu.Unlock()
+}
+
 func (t *tracker) clearBossBars(s *Session) {
 	t.bossBars.Each(func(i int64) bool {
-		_ = s.clientConn.WritePacket(&packet.BossEvent{
+		_ = s.client.WritePacket(&packet.BossEvent{
 			BossEntityUniqueID: i,
 			EventType:          packet.BossEventHide,
 		})
@@ -75,8 +90,8 @@ func (t *tracker) clearBossBars(s *Session) {
 
 func (t *tracker) clearEffects(s *Session) {
 	t.effects.Each(func(i int32) bool {
-		_ = s.clientConn.WritePacket(&packet.MobEffect{
-			EntityRuntimeID: s.clientConn.GameData().EntityRuntimeID,
+		_ = s.client.WritePacket(&packet.MobEffect{
+			EntityRuntimeID: s.client.GameData().EntityRuntimeID,
 			EffectType:      i,
 			Operation:       packet.MobEffectRemove,
 		})
@@ -87,7 +102,7 @@ func (t *tracker) clearEffects(s *Session) {
 
 func (t *tracker) clearEntities(s *Session) {
 	t.entities.Each(func(i int64) bool {
-		_ = s.clientConn.WritePacket(&packet.RemoveActor{
+		_ = s.client.WritePacket(&packet.RemoveActor{
 			EntityUniqueID: i,
 		})
 		return true
@@ -105,7 +120,7 @@ func (t *tracker) clearPlayers(s *Session) {
 	})
 	t.players.Clear()
 
-	_ = s.clientConn.WritePacket(&packet.PlayerList{
+	_ = s.client.WritePacket(&packet.PlayerList{
 		ActionType: packet.PlayerListActionRemove,
 		Entries:    entries,
 	})
@@ -113,7 +128,7 @@ func (t *tracker) clearPlayers(s *Session) {
 
 func (t *tracker) clearScoreboards(s *Session) {
 	t.scoreboards.Each(func(i string) bool {
-		_ = s.clientConn.WritePacket(&packet.RemoveObjective{
+		_ = s.client.WritePacket(&packet.RemoveObjective{
 			ObjectiveName: i,
 		})
 		return true

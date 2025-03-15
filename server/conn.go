@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,17 +30,21 @@ const (
 // Conn represents a connection to a server, managing packet reading and writing
 // over an underlying io.ReadWriteCloser.
 type Conn struct {
-	conn       io.ReadWriteCloser
-	clientConn *minecraft.Conn
-	logger     *slog.Logger
+	cancelFunc context.CancelCauseFunc
+	ctx        context.Context
+
+	conn   io.ReadWriteCloser
+	client *minecraft.Conn
+	logger *slog.Logger
 
 	reader   *protocol.Reader
 	writer   *protocol.Writer
 	writerMu sync.Mutex
 
-	runtimeID uint64
-	uniqueID  int64
-	token     string
+	syncProtocol bool
+	runtimeID    uint64
+	uniqueID     int64
+	token        string
 
 	gameData minecraft.GameData
 	shieldID int32
@@ -52,42 +57,51 @@ type Conn struct {
 	header          *packet.Header
 
 	connected chan struct{}
-	closed    chan struct{}
+	once      sync.Once
 }
 
 // NewConn creates a new Conn instance using the provided io.ReadWriteCloser.
 // It is used for reading and writing packets to the underlying connection.
-func NewConn(conn io.ReadWriteCloser, client *minecraft.Conn, logger *slog.Logger, proto minecraft.Protocol, token string) *Conn {
+func NewConn(conn io.ReadWriteCloser, client *minecraft.Conn, logger *slog.Logger, syncProtocol bool, token string) *Conn {
+	var proto minecraft.Protocol
+	if syncProtocol {
+		proto = client.Proto()
+	} else {
+		proto = minecraft.DefaultProtocol
+	}
+
 	c := &Conn{
-		conn:       conn,
-		clientConn: client,
-		logger:     logger,
+		conn:   conn,
+		client: client,
+		logger: logger,
 
 		reader: protocol.NewReader(conn),
 		writer: protocol.NewWriter(conn),
 
 		token: token,
 
-		protocol: proto,
-		pool:     proto.Packets(false),
-		header:   &packet.Header{},
+		syncProtocol: syncProtocol,
+		protocol:     proto,
+		pool:         proto.Packets(false),
+		header:       &packet.Header{},
 
 		connected: make(chan struct{}),
-		closed:    make(chan struct{}),
 	}
+	c.ctx, c.cancelFunc = context.WithCancelCause(client.Context())
 	go func() {
+	read:
 		for {
 			select {
-			case <-c.closed:
-				return
+			case <-c.ctx.Done():
+				break read
 			case <-c.connected:
-				return
+				break read
 			default:
 				payload, err := c.read()
 				if err != nil {
-					_ = c.Close()
+					c.CloseWithError(fmt.Errorf("failed to read connection sequence packet: %w", err))
 					c.logger.Error("failed to read connection sequence packet", "err", err)
-					return
+					break read
 				}
 
 				pk, ok := payload.(packet.Packet)
@@ -96,29 +110,10 @@ func NewConn(conn io.ReadWriteCloser, client *minecraft.Conn, logger *slog.Logge
 					continue
 				}
 
-				handled := false
-				for _, id := range c.expectedIds.Load().([]uint32) {
-					for _, latest := range c.protocol.ConvertToLatest(pk, client) {
-						if pk.ID() != id {
-							continue
-						}
-
-						handled = true
-						deferrable, err := c.handlePacket(latest)
-						if err != nil {
-							c.logger.Error("failed to handle connection sequence packet", "err", err)
-							_ = c.Close()
-							return
-						}
-
-						if deferrable {
-							c.deferPacket(pk)
-						}
-					}
-				}
-
-				if !handled {
-					c.deferPacket(pk)
+				if err := c.handlePacket(pk); err != nil {
+					c.CloseWithError(fmt.Errorf("failed to handle connection sequence packet: %w", err))
+					c.logger.Error("failed to handle connection sequence packet", "err", err)
+					break read
 				}
 			}
 		}
@@ -186,7 +181,7 @@ func (c *Conn) ConnectContext(ctx context.Context) error {
 	}
 
 	select {
-	case <-c.closed:
+	case <-c.ctx.Done():
 		return net.ErrClosed
 	case <-ctx.Done():
 		return context.Cause(ctx)
@@ -213,16 +208,24 @@ func (c *Conn) ShieldID() int32 {
 	return c.shieldID
 }
 
+// Context returns the connection's context. The context is canceled when the connection is closed,
+// allowing for cancellation of operations that are tied to the lifecycle of the connection.
+func (c *Conn) Context() context.Context {
+	return c.ctx
+}
+
 // Close closes the underlying connection.
-func (c *Conn) Close() (err error) {
-	select {
-	case <-c.closed:
-		return errors.New("already closed")
-	default:
-		close(c.closed)
+func (c *Conn) Close() error {
+	c.CloseWithError(errors.New("closed by application"))
+	return nil
+}
+
+// CloseWithError closes the underlying connection.
+func (c *Conn) CloseWithError(err error) {
+	c.once.Do(func() {
+		c.cancelFunc(err)
 		_ = c.conn.Close()
-		return
-	}
+	})
 }
 
 // read reads a packet from the connection, handling decompression and decoding as necessary.
@@ -231,7 +234,7 @@ func (c *Conn) Close() (err error) {
 // it returns the raw decompressed payload.
 func (c *Conn) read() (pk any, err error) {
 	select {
-	case <-c.closed:
+	case <-c.ctx.Done():
 		return nil, net.ErrClosed
 	default:
 	}
@@ -286,18 +289,18 @@ func (c *Conn) expect(ids ...uint32) {
 
 // sendConnectionRequest initiates the connection sequence by sending a ConnectionRequest packet to the underlying connection.
 func (c *Conn) sendConnectionRequest() error {
-	clientData, err := json.Marshal(c.clientConn.ClientData())
+	clientData, err := json.Marshal(c.client.ClientData())
 	if err != nil {
 		return err
 	}
 
-	identityData, err := json.Marshal(c.clientConn.IdentityData())
+	identityData, err := json.Marshal(c.client.IdentityData())
 	if err != nil {
 		return err
 	}
 
 	err = c.WritePacket(&packet2.ConnectionRequest{
-		Addr:         c.clientConn.RemoteAddr().String(),
+		Addr:         c.client.RemoteAddr().String(),
 		Token:        c.token,
 		ClientData:   clientData,
 		IdentityData: identityData,
@@ -310,34 +313,52 @@ func (c *Conn) sendConnectionRequest() error {
 }
 
 // handlePacket handles an expected packet that was received before the connection sequence finalization.
-func (c *Conn) handlePacket(pk packet.Packet) (bool, error) {
-	switch pk := pk.(type) {
-	case *packet2.ConnectionResponse:
-		return c.handleConnectionResponse(pk)
-	case *packet.StartGame:
-		return c.handleStartGame(pk)
-	case *packet.ItemRegistry:
-		return c.handleItemRegistry(pk)
-	case *packet.ChunkRadiusUpdated:
-		return c.handleChunkRadiusUpdated(pk)
-	case *packet.PlayStatus:
-		return c.handlePlayStatus(pk)
-	default:
-		return false, nil
+func (c *Conn) handlePacket(p packet.Packet) (err error) {
+	pks := []packet.Packet{p}
+	if c.syncProtocol {
+		pks = c.protocol.ConvertToLatest(p, c.client)
 	}
+
+	expectedIds := c.expectedIds.Load().([]uint32)
+	for _, pk := range pks {
+		if !slices.Contains(expectedIds, pk.ID()) {
+			c.deferPacket(pk)
+			continue
+		}
+
+		switch pk := pk.(type) {
+		case *packet2.ConnectionResponse:
+			err = c.handleConnectionResponse(pk)
+		case *packet.StartGame:
+			err = c.handleStartGame(pk)
+		case *packet.ItemRegistry:
+			err = c.handleItemRegistry(pk)
+		case *packet.ChunkRadiusUpdated:
+			err = c.handleChunkRadiusUpdated(pk)
+		case *packet.PlayStatus:
+			err = c.handlePlayStatus(pk)
+		default:
+			c.deferPacket(pk)
+		}
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // handleConnectionResponse handles the ConnectionResponse packet.
-func (c *Conn) handleConnectionResponse(pk *packet2.ConnectionResponse) (bool, error) {
+func (c *Conn) handleConnectionResponse(pk *packet2.ConnectionResponse) error {
 	c.expect(packet.IDStartGame)
 	c.runtimeID = pk.RuntimeID
 	c.uniqueID = pk.UniqueID
 	c.logger.Debug("received connection_response, expecting start_game")
-	return false, nil
+	return nil
 }
 
 // handleStartGame handles the StartGame packet.
-func (c *Conn) handleStartGame(pk *packet.StartGame) (bool, error) {
+func (c *Conn) handleStartGame(pk *packet.StartGame) error {
 	c.expect(packet.IDItemRegistry)
 	c.gameData = minecraft.GameData{
 		Difficulty:                   pk.Difficulty,
@@ -373,11 +394,12 @@ func (c *Conn) handleStartGame(pk *packet.StartGame) (bool, error) {
 		UseBlockNetworkIDHashes:      pk.UseBlockNetworkIDHashes,
 	}
 	c.logger.Debug("received start_game, expecting item_registry")
-	return false, nil
+	return nil
 }
 
 // handleItemRegistry handles the ItemRegistry packet.
-func (c *Conn) handleItemRegistry(pk *packet.ItemRegistry) (bool, error) {
+func (c *Conn) handleItemRegistry(pk *packet.ItemRegistry) error {
+	c.deferPacket(pk)
 	c.expect(packet.IDChunkRadiusUpdated)
 	c.gameData.Items = pk.Items
 	for _, item := range pk.Items {
@@ -387,28 +409,30 @@ func (c *Conn) handleItemRegistry(pk *packet.ItemRegistry) (bool, error) {
 	}
 
 	if err := c.WritePacket(&packet.RequestChunkRadius{ChunkRadius: 16}); err != nil {
-		return false, err
+		return err
 	}
 	c.logger.Debug("received item_registry, expecting chunk_radius_updated")
-	return true, nil
+	return nil
 }
 
 // handleChunkRadiusUpdated handles the first ChunkRadiusUpdated packet, which updates the initial chunk
 // radius of the connection.
-func (c *Conn) handleChunkRadiusUpdated(pk *packet.ChunkRadiusUpdated) (bool, error) {
+func (c *Conn) handleChunkRadiusUpdated(pk *packet.ChunkRadiusUpdated) error {
+	c.deferPacket(pk)
 	c.expect(packet.IDPlayStatus)
 	c.gameData.ChunkRadius = pk.ChunkRadius
 	c.logger.Debug("received chunk_radius_updated, expecting play_status")
-	return true, nil
+	return nil
 }
 
 // handlePlayStatus handles the first PlayStatus packet. It is the final packet in the connection sequence,
 // it responds to the server with a packet.SetLocalPlayerAsInitialised to finalize the connection sequence and spawn the player.
-func (c *Conn) handlePlayStatus(_ *packet.PlayStatus) (bool, error) {
+func (c *Conn) handlePlayStatus(pk *packet.PlayStatus) error {
+	c.deferPacket(pk)
 	if err := c.WritePacket(&packet.SetLocalPlayerAsInitialised{EntityRuntimeID: c.runtimeID}); err != nil {
-		return false, err
+		return err
 	}
 	close(c.connected)
 	c.logger.Debug("received play_status, finalizing connection sequence")
-	return true, nil
+	return nil
 }
