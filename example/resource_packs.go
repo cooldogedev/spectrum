@@ -63,7 +63,7 @@ func parse(keys map[string]string) ([]*resource.Pack, error) {
 		}
 
 		if key, ok := keys[pack.UUID().String()]; ok {
-			pack.WithContentKey(key)
+			pack = pack.WithContentKey(key)
 		}
 		packs = append(packs, pack)
 	}
