@@ -21,7 +21,7 @@ loop:
 			break loop
 		case <-s.serverConn.Context().Done():
 			if s.transferring.Load() {
-				continue
+				continue loop
 			}
 
 			if err := s.fallback(); err != nil {
