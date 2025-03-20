@@ -20,6 +20,10 @@ loop:
 		case <-s.ctx.Done():
 			break loop
 		case <-s.serverConn.Context().Done():
+			if s.transferring.Load() {
+				continue
+			}
+
 			if err := s.fallback(); err != nil {
 				s.CloseWithError(fmt.Errorf("fallback failed: %w", err))
 				logError(s, "failed to fallback to a different server", err)

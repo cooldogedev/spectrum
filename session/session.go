@@ -91,20 +91,20 @@ func (s *Session) LoginContext(ctx context.Context) (err error) {
 		return err
 	}
 
-	serverConn, err := s.dial(ctx, serverAddr)
+	conn, err := s.dial(ctx, serverAddr)
 	if err != nil {
 		s.logger.Debug("dialer failed", "err", err)
 		return err
 	}
 
 	s.serverAddr = serverAddr
-	s.serverConn = serverConn
-	if err := serverConn.ConnectContext(ctx); err != nil {
+	s.serverConn = conn
+	if err := conn.ConnectContext(ctx); err != nil {
 		s.logger.Debug("connection sequence failed", "err", err)
 		return err
 	}
 
-	gameData := serverConn.GameData()
+	gameData := conn.GameData()
 	s.processor.ProcessStartGame(NewContext(), &gameData)
 	if err := s.client.StartGame(gameData); err != nil {
 		s.logger.Debug("startgame sequence failed", "err", err)
