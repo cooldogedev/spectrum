@@ -21,6 +21,15 @@ type Opts struct {
 	Token string `yaml:"token"`
 }
 
+// ClientDecodeAsMap converts the ClientDecode slice to a map for faster lookups.
+func (opts *Opts) ClientDecodeAsMap() map[uint32]struct{} {
+	m := make(map[uint32]struct{}, len(opts.ClientDecode))
+	for _, id := range opts.ClientDecode {
+		m[id] = struct{}{}
+	}
+	return m
+}
+
 // DefaultOpts returns the default configuration options for Spectrum.
 func DefaultOpts() *Opts {
 	return &Opts{
