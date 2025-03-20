@@ -18,6 +18,7 @@ loop:
 	for {
 		select {
 		case <-s.ctx.Done():
+			s.CloseWithError(context.Cause(s.ctx))
 			break loop
 		case <-s.serverConn.Context().Done():
 			if s.transferring.Load() {
@@ -98,6 +99,7 @@ loop:
 	for {
 		select {
 		case <-s.ctx.Done():
+			s.CloseWithError(context.Cause(s.ctx))
 			break loop
 		default:
 		}
@@ -125,6 +127,7 @@ loop:
 	for {
 		select {
 		case <-s.ctx.Done():
+			s.CloseWithError(context.Cause(s.ctx))
 			break loop
 		case <-ticker.C:
 			if err := s.Server().WritePacket(&packet2.Latency{Latency: s.client.Latency().Milliseconds() * 2, Timestamp: time.Now().UnixMilli()}); err != nil {
