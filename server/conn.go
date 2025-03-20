@@ -41,9 +41,10 @@ type Conn struct {
 	writer   *protocol.Writer
 	writerMu sync.Mutex
 
+	runtimeID uint64
+	uniqueID  int64
+
 	syncProtocol bool
-	runtimeID    uint64
-	uniqueID     int64
 	token        string
 
 	gameData minecraft.GameData
@@ -78,12 +79,12 @@ func NewConn(conn io.ReadWriteCloser, client *minecraft.Conn, logger *slog.Logge
 		reader: protocol.NewReader(conn),
 		writer: protocol.NewWriter(conn),
 
-		token: token,
-
 		syncProtocol: syncProtocol,
-		protocol:     proto,
-		pool:         proto.Packets(false),
-		header:       &packet.Header{},
+		token:        token,
+
+		protocol: proto,
+		pool:     proto.Packets(false),
+		header:   &packet.Header{},
 
 		connected: make(chan struct{}),
 	}
@@ -314,14 +315,15 @@ func (c *Conn) sendConnectionRequest() error {
 
 // handlePacket handles an expected packet that was received before the connection sequence finalization.
 func (c *Conn) handlePacket(p packet.Packet) (err error) {
-	pks := []packet.Packet{p}
+	var pks []packet.Packet
 	if c.syncProtocol {
 		pks = c.protocol.ConvertToLatest(p, c.client)
+	} else {
+		pks = []packet.Packet{p}
 	}
 
-	expectedIds := c.expectedIds.Load().([]uint32)
 	for _, pk := range pks {
-		if !slices.Contains(expectedIds, pk.ID()) {
+		if !slices.Contains(c.expectedIds.Load().([]uint32), pk.ID()) {
 			c.deferPacket(pk)
 			continue
 		}
