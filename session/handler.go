@@ -20,11 +20,12 @@ loop:
 		case <-s.ctx.Done():
 			s.CloseWithError(context.Cause(s.ctx))
 			break loop
-		case <-s.serverConn.Context().Done():
-			if s.transferring.Load() {
-				continue loop
-			}
+		default:
+		}
 
+		server := s.Server()
+		select {
+		case <-server.Context().Done():
 			if err := s.fallback(); err != nil {
 				s.CloseWithError(fmt.Errorf("fallback failed: %w", err))
 				logError(s, "failed to fallback to a different server", err)
@@ -33,7 +34,6 @@ loop:
 		default:
 		}
 
-		server := s.Server()
 		pk, err := server.ReadPacket()
 		if err != nil {
 			server.CloseWithError(fmt.Errorf("failed to read packet from server: %w", err))
