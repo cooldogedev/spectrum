@@ -31,6 +31,7 @@ loop:
 				logError(s, "failed to fallback to a different server", err)
 				break loop
 			}
+			continue loop
 		default:
 		}
 
