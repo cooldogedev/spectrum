@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"time"
 
 	packet2 "github.com/cooldogedev/spectrum/server/packet"
@@ -146,7 +145,7 @@ func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, shi
 		return errors.New("failed to decode header")
 	}
 
-	if !slices.Contains(s.opts.ClientDecode, header.PacketID) {
+	if _, ok := s.clientDecode[header.PacketID]; !ok {
 		s.processor.ProcessClientEncoded(ctx, &payload)
 		if !ctx.Cancelled() {
 			return s.Server().Write(payload)
