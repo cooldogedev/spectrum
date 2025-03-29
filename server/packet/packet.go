@@ -7,6 +7,7 @@ func init() {
 	packet.RegisterPacketFromClient(IDLatency, func() packet.Packet { return &Latency{} })
 
 	packet.RegisterPacketFromServer(IDConnectionResponse, func() packet.Packet { return &ConnectionResponse{} })
+	packet.RegisterPacketFromServer(IDFlush, func() packet.Packet { return &Flush{} })
 	packet.RegisterPacketFromServer(IDLatency, func() packet.Packet { return &Latency{} })
 	packet.RegisterPacketFromServer(IDTransfer, func() packet.Packet { return &Transfer{} })
 }

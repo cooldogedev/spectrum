@@ -8,7 +8,7 @@ import (
 	"slices"
 	"time"
 
-	packet2 "github.com/cooldogedev/spectrum/server/packet"
+	spectrumpacket "github.com/cooldogedev/spectrum/server/packet"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
@@ -42,9 +42,11 @@ loop:
 		}
 
 		switch pk := pk.(type) {
-		case *packet2.Latency:
+		case *spectrumpacket.Flush:
+			_ = s.client.Flush()
+		case *spectrumpacket.Latency:
 			s.latency.Store(pk.Latency)
-		case *packet2.Transfer:
+		case *spectrumpacket.Transfer:
 			if err := s.Transfer(pk.Addr); err != nil {
 				logError(s, "failed to transfer", err)
 			}
@@ -131,7 +133,7 @@ loop:
 			s.CloseWithError(context.Cause(s.ctx))
 			break loop
 		case <-ticker.C:
-			if err := s.Server().WritePacket(&packet2.Latency{Latency: s.client.Latency().Milliseconds() * 2, Timestamp: time.Now().UnixMilli()}); err != nil {
+			if err := s.Server().WritePacket(&spectrumpacket.Latency{Latency: s.client.Latency().Milliseconds() * 2, Timestamp: time.Now().UnixMilli()}); err != nil {
 				logError(s, "failed to write latency packet", err)
 			}
 		}
