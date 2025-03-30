@@ -44,6 +44,8 @@ type Session struct {
 	latency      atomic.Int64
 	transferring atomic.Bool
 	once         sync.Once
+
+	clientDecode map[uint32]struct{}
 }
 
 // NewSession creates a new Session instance using the provided minecraft.Conn.
@@ -61,6 +63,8 @@ func NewSession(client *minecraft.Conn, logger *slog.Logger, registry *Registry,
 		animation: &animation.Dimension{},
 		processor: NopProcessor{},
 		tracker:   newTracker(),
+
+		clientDecode: opts.ClientDecodeAsMap(),
 	}
 	s.ctx, s.cancelFunc = context.WithCancelCause(client.Context())
 	return s
@@ -234,6 +238,7 @@ func (s *Session) Opts() util.Opts {
 // SetOpts updates the session options.
 func (s *Session) SetOpts(opts util.Opts) {
 	s.opts = opts
+	s.clientDecode = opts.ClientDecodeAsMap()
 }
 
 // Processor returns the current processor.
