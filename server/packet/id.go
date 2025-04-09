@@ -6,4 +6,5 @@ const (
 	IDFlush
 	IDLatency
 	IDTransfer
+	IDUpdateCache
 )

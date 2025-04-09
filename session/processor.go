@@ -37,12 +37,16 @@ type Processor interface {
 	ProcessClient(ctx *Context, pk *packet.Packet)
 	// ProcessClientEncoded is called before forwarding the client-sent packets to the server.
 	ProcessClientEncoded(ctx *Context, pk *[]byte)
+	// ProcessFlush is called when the downstream server flushes the player's minecraft.Conn buffer.
+	ProcessFlush(ctx *Context)
 	// ProcessPreTransfer is called before transferring the player to a different server.
 	ProcessPreTransfer(ctx *Context, origin *string, target *string)
 	// ProcessTransferFailure is called when the player transfer to a different server fails.
 	ProcessTransferFailure(ctx *Context, origin *string, target *string)
 	// ProcessPostTransfer is called after transferring the player to a different server.
 	ProcessPostTransfer(ctx *Context, origin *string, target *string)
+	// ProcessCache is called before updating the session's cache.
+	ProcessCache(ctx *Context, new *[]byte)
 	// ProcessDisconnection is called when the player disconnects from the proxy.
 	ProcessDisconnection(ctx *Context)
 }
@@ -58,7 +62,9 @@ func (NopProcessor) ProcessServer(_ *Context, _ *packet.Packet)              {}
 func (NopProcessor) ProcessServerEncoded(_ *Context, _ *[]byte)              {}
 func (NopProcessor) ProcessClient(_ *Context, _ *packet.Packet)              {}
 func (NopProcessor) ProcessClientEncoded(_ *Context, _ *[]byte)              {}
+func (NopProcessor) ProcessFlush(_ *Context)                                 {}
 func (NopProcessor) ProcessPreTransfer(_ *Context, _ *string, _ *string)     {}
 func (NopProcessor) ProcessTransferFailure(_ *Context, _ *string, _ *string) {}
 func (NopProcessor) ProcessPostTransfer(_ *Context, _ *string, _ *string)    {}
+func (NopProcessor) ProcessCache(_ *Context, _ *[]byte)                      {}
 func (NopProcessor) ProcessDisconnection(_ *Context)                         {}

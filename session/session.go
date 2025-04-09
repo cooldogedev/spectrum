@@ -38,8 +38,10 @@ type Session struct {
 	transport transport.Transport
 
 	animation animation.Animation
-	processor Processor
 	tracker   *tracker
+
+	cache     atomic.Value
+	processor atomic.Value
 
 	latency      atomic.Int64
 	transferring atomic.Bool
@@ -59,10 +61,11 @@ func NewSession(client *minecraft.Conn, logger *slog.Logger, registry *Registry,
 		transport: transport,
 
 		animation: &animation.Dimension{},
-		processor: NopProcessor{},
 		tracker:   newTracker(),
 	}
 	s.ctx, s.cancelFunc = context.WithCancelCause(client.Context())
+	s.cache.Store([]byte(nil))
+	s.processor.Store(NopProcessor{})
 	return s
 }
 
@@ -105,7 +108,7 @@ func (s *Session) LoginContext(ctx context.Context) (err error) {
 	}
 
 	gameData := conn.GameData()
-	s.processor.ProcessStartGame(NewContext(), &gameData)
+	s.Processor().ProcessStartGame(NewContext(), &gameData)
 	if err := s.client.StartGame(gameData); err != nil {
 		s.logger.Debug("startgame sequence failed", "err", err)
 		return err
@@ -145,7 +148,7 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 	defer s.transferring.Store(false)
 
 	processorCtx := NewContext()
-	s.processor.ProcessPreTransfer(processorCtx, &s.serverAddr, &addr)
+	s.Processor().ProcessPreTransfer(processorCtx, &s.serverAddr, &addr)
 	if processorCtx.Cancelled() {
 		return errors.New("processor failed")
 	}
@@ -159,7 +162,7 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 		if err != nil {
 			s.sendMetadata(false)
 			s.serverMu.Unlock()
-			s.processor.ProcessTransferFailure(NewContext(), &s.serverAddr, &addr)
+			s.Processor().ProcessTransferFailure(NewContext(), &s.serverAddr, &addr)
 		}
 	}()
 
@@ -211,7 +214,7 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 	s.serverAddr = addr
 	s.serverConn = conn
 	s.serverMu.Unlock()
-	s.processor.ProcessPostTransfer(NewContext(), &origin, &addr)
+	s.Processor().ProcessPostTransfer(NewContext(), &origin, &addr)
 	s.logger.Debug("transferred session", "origin", origin, "target", addr)
 	return nil
 }
@@ -226,24 +229,28 @@ func (s *Session) SetAnimation(animation animation.Animation) {
 	s.animation = animation
 }
 
-// Opts returns the current session options.
-func (s *Session) Opts() util.Opts {
-	return s.opts
+// Cache returns the current session cache.
+func (s *Session) Cache() []byte {
+	return s.cache.Load().([]byte)
 }
 
-// SetOpts updates the session options.
-func (s *Session) SetOpts(opts util.Opts) {
-	s.opts = opts
+// SetCache updates the session cache.
+func (s *Session) SetCache(cache []byte) {
+	ctx := NewContext()
+	s.Processor().ProcessCache(ctx, &cache)
+	if !ctx.Cancelled() {
+		s.cache.Store(cache)
+	}
 }
 
 // Processor returns the current processor.
 func (s *Session) Processor() Processor {
-	return s.processor
+	return s.processor.Load().(Processor)
 }
 
 // SetProcessor sets a new processor for the session.
 func (s *Session) SetProcessor(processor Processor) {
-	s.processor = processor
+	s.processor.Store(processor)
 }
 
 // Latency returns the total latency experienced by the session, combining client and server latencies.
@@ -286,7 +293,7 @@ func (s *Session) CloseWithError(err error) {
 	s.once.Do(func() {
 		_ = s.client.WritePacket(&packet.Disconnect{Message: err.Error()})
 		_ = s.client.Close()
-		s.processor.ProcessDisconnection(NewContext())
+		s.Processor().ProcessDisconnection(NewContext())
 		s.serverMu.RLock()
 		if s.serverConn != nil {
 			s.serverConn.CloseWithError(err)
@@ -310,7 +317,7 @@ func (s *Session) dial(ctx context.Context, addr string) (*server.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return server.NewConn(conn, s.client, s.logger.With("addr", addr), s.opts.SyncProtocol, s.opts.Token), nil
+	return server.NewConn(conn, s.client, s.logger.With("addr", addr), s.opts.SyncProtocol, s.Cache()), nil
 }
 
 // fallback attempts to transfer the session to a fallback server provided by the discovery.
