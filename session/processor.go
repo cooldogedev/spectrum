@@ -37,7 +37,7 @@ type Processor interface {
 	ProcessClient(ctx *Context, pk *packet.Packet)
 	// ProcessClientEncoded is called before forwarding the client-sent packets to the server.
 	ProcessClientEncoded(ctx *Context, pk *[]byte)
-	// ProcessFlush is called when the downstream server flushes the player's minecraft.Conn buffer.
+	// ProcessFlush is called before flushing the player's minecraft.Conn buffer in response to a downstream server request.
 	ProcessFlush(ctx *Context)
 	// ProcessPreTransfer is called before transferring the player to a different server.
 	ProcessPreTransfer(ctx *Context, origin *string, target *string)

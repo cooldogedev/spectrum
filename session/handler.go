@@ -43,8 +43,17 @@ loop:
 
 		switch pk := pk.(type) {
 		case *spectrumpacket.Flush:
-			s.Processor().ProcessFlush(NewContext())
-			_ = s.client.Flush()
+			ctx := NewContext()
+			s.Processor().ProcessFlush(ctx)
+			if ctx.Cancelled() {
+				continue loop
+			}
+
+			if err := s.client.Flush(); err != nil {
+				s.CloseWithError(fmt.Errorf("failed to flush client's buffer: %w", err))
+				logError(s, "failed to flush client's buffer", err)
+				break loop
+			}
 		case *spectrumpacket.Latency:
 			s.latency.Store(pk.Latency)
 		case *spectrumpacket.Transfer:
