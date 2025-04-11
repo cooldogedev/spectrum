@@ -10,4 +10,5 @@ func init() {
 	packet.RegisterPacketFromServer(IDFlush, func() packet.Packet { return &Flush{} })
 	packet.RegisterPacketFromServer(IDLatency, func() packet.Packet { return &Latency{} })
 	packet.RegisterPacketFromServer(IDTransfer, func() packet.Packet { return &Transfer{} })
+	packet.RegisterPacketFromServer(IDUpdateCache, func() packet.Packet { return &UpdateCache{} })
 }

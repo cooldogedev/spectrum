@@ -7,12 +7,17 @@ import "github.com/sandertv/gophertunnel/minecraft/protocol"
 type ConnectionRequest struct {
 	// Addr is the address of the player.
 	Addr string
-	// Token is the proxy's token that's used for authorization by the server.
-	Token string
+	// ProtocolID is the protocol version identifier of the player.
+	ProtocolID int32
 	// ClientData is the player's login.ClientData.
 	ClientData []byte
 	// IdentityData is the player's login.IdentityData.
 	IdentityData []byte
+	// Cache is optional data sent by the downstream server, intended to optimize
+	// communication between servers. This data can include shared information that
+	// is frequently used across multiple servers and can be used to avoid redundant
+	// data fetching (e.g., pre-cached player data or session information).
+	Cache []byte
 }
 
 // ID ...
@@ -23,7 +28,8 @@ func (pk *ConnectionRequest) ID() uint32 {
 // Marshal ...
 func (pk *ConnectionRequest) Marshal(io protocol.IO) {
 	io.String(&pk.Addr)
-	io.String(&pk.Token)
 	io.ByteSlice(&pk.ClientData)
 	io.ByteSlice(&pk.IdentityData)
+	io.Int32(&pk.ProtocolID)
+	io.ByteSlice(&pk.Cache)
 }

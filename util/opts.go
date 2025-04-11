@@ -7,7 +7,7 @@ type Opts struct {
 	// AutoLogin determines whether automatic login should be enabled.
 	AutoLogin bool `yaml:"auto_login"`
 	// ClientDecode is a list of client packet identifiers that need to be decoded by the proxy.
-	ClientDecode []uint32
+	ClientDecode []uint32 `yaml:"client_decode"`
 	// LatencyInterval is the interval at which the latency of the connection is updated in milliseconds.
 	// Lower intervals provide more accurate latency but use more bandwidth.
 	LatencyInterval int64 `yaml:"latency_interval"`
@@ -17,8 +17,6 @@ type Opts struct {
 	// When enabled, the proxy uses the client's protocol version (minecraft.Protocol) for reading and
 	// writing packets. If disabled, the proxy defaults to using the latest protocol version (minecraft.DefaultProtocol).
 	SyncProtocol bool `yaml:"sync_protocol"`
-	// Token is the authentication token that Spectrum uses to authenticate with servers.
-	Token string `yaml:"token"`
 }
 
 // DefaultOpts returns the default configuration options for Spectrum.
