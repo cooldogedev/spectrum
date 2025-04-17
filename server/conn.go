@@ -45,7 +45,7 @@ type Conn struct {
 	uniqueID  int64
 
 	syncProtocol bool
-	token        string
+	cache        []byte
 
 	gameData minecraft.GameData
 	shieldID int32
@@ -63,7 +63,7 @@ type Conn struct {
 
 // NewConn creates a new Conn instance using the provided io.ReadWriteCloser.
 // It is used for reading and writing packets to the underlying connection.
-func NewConn(conn io.ReadWriteCloser, client *minecraft.Conn, logger *slog.Logger, syncProtocol bool, token string) *Conn {
+func NewConn(conn io.ReadWriteCloser, client *minecraft.Conn, logger *slog.Logger, syncProtocol bool, cache []byte) *Conn {
 	var proto minecraft.Protocol
 	if syncProtocol {
 		proto = client.Proto()
@@ -80,7 +80,7 @@ func NewConn(conn io.ReadWriteCloser, client *minecraft.Conn, logger *slog.Logge
 		writer: protocol.NewWriter(conn),
 
 		syncProtocol: syncProtocol,
-		token:        token,
+		cache:        cache,
 
 		protocol: proto,
 		pool:     proto.Packets(false),
@@ -302,9 +302,10 @@ func (c *Conn) sendConnectionRequest() error {
 
 	err = c.WritePacket(&packet2.ConnectionRequest{
 		Addr:         c.client.RemoteAddr().String(),
-		Token:        c.token,
+		ProtocolID:   c.client.Proto().ID(),
 		ClientData:   clientData,
 		IdentityData: identityData,
+		Cache:        c.cache,
 	})
 	if err != nil {
 		return err

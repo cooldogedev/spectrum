@@ -43,16 +43,28 @@ loop:
 
 		switch pk := pk.(type) {
 		case *spectrumpacket.Flush:
-			_ = s.client.Flush()
+			ctx := NewContext()
+			s.Processor().ProcessFlush(ctx)
+			if ctx.Cancelled() {
+				continue loop
+			}
+
+			if err := s.client.Flush(); err != nil {
+				s.CloseWithError(fmt.Errorf("failed to flush client's buffer: %w", err))
+				logError(s, "failed to flush client's buffer", err)
+				break loop
+			}
 		case *spectrumpacket.Latency:
 			s.latency.Store(pk.Latency)
 		case *spectrumpacket.Transfer:
 			if err := s.Transfer(pk.Addr); err != nil {
 				logError(s, "failed to transfer", err)
 			}
+		case *spectrumpacket.UpdateCache:
+			s.SetCache(pk.Cache)
 		case packet.Packet:
 			ctx := NewContext()
-			s.processor.ProcessServer(ctx, &pk)
+			s.Processor().ProcessServer(ctx, &pk)
 			if ctx.Cancelled() {
 				continue loop
 			}
@@ -72,7 +84,7 @@ loop:
 			}
 		case []byte:
 			ctx := NewContext()
-			s.processor.ProcessServerEncoded(ctx, &pk)
+			s.Processor().ProcessServerEncoded(ctx, &pk)
 			if ctx.Cancelled() {
 				continue loop
 			}
@@ -149,7 +161,7 @@ func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, shi
 	}
 
 	if !slices.Contains(s.opts.ClientDecode, header.PacketID) {
-		s.processor.ProcessClientEncoded(ctx, &payload)
+		s.Processor().ProcessClientEncoded(ctx, &payload)
 		if !ctx.Cancelled() {
 			return s.Server().Write(payload)
 		}
@@ -169,7 +181,7 @@ func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, shi
 
 	pk := factory()
 	pk.Marshal(s.client.Proto().NewReader(buf, shieldID, true))
-	s.processor.ProcessClient(ctx, &pk)
+	s.Processor().ProcessClient(ctx, &pk)
 	if !ctx.Cancelled() {
 		if s.opts.SyncProtocol {
 			return s.Server().WritePacket(pk)
