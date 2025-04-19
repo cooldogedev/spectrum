@@ -40,9 +40,10 @@ type Session struct {
 	animation animation.Animation
 	tracker   *tracker
 
-	cache     atomic.Value
-	processor atomic.Value
+	processor   Processor
+	processorMu sync.RWMutex
 
+	cache        atomic.Value
 	latency      atomic.Int64
 	transferring atomic.Bool
 	once         sync.Once
@@ -60,12 +61,13 @@ func NewSession(client *minecraft.Conn, logger *slog.Logger, registry *Registry,
 		opts:      opts,
 		transport: transport,
 
+		processor: NopProcessor{},
+
 		animation: &animation.Dimension{},
 		tracker:   newTracker(),
 	}
 	s.ctx, s.cancelFunc = context.WithCancelCause(client.Context())
 	s.cache.Store([]byte(nil))
-	s.processor.Store(NopProcessor{})
 	return s
 }
 
@@ -245,12 +247,16 @@ func (s *Session) SetCache(cache []byte) {
 
 // Processor returns the current processor.
 func (s *Session) Processor() Processor {
-	return s.processor.Load().(Processor)
+	s.processorMu.RLock()
+	defer s.processorMu.RUnlock()
+	return s.processor
 }
 
 // SetProcessor sets a new processor for the session.
 func (s *Session) SetProcessor(processor Processor) {
-	s.processor.Store(processor)
+	s.processorMu.Lock()
+	s.processor = processor
+	s.processorMu.Unlock()
 }
 
 // Latency returns the total latency experienced by the session, combining client and server latencies.
