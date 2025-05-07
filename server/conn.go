@@ -118,6 +118,8 @@ func (c *Conn) ReadPacket() (any, error) {
 		if err := c.handlePacket(pk); err != nil {
 			return nil, fmt.Errorf("failed to handle packet %v: %w", pk.ID(), err)
 		}
+	} else {
+		c.deferPacket(pk)
 	}
 	return c.ReadPacket()
 }
