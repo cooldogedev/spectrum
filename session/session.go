@@ -102,8 +102,13 @@ func (s *Session) LoginContext(ctx context.Context) (err error) {
 		return err
 	}
 
+	s.serverMu.Lock()
 	s.serverAddr = serverAddr
 	s.serverConn = conn
+	s.serverMu.Unlock()
+	go handleServer(s)
+	go handleClient(s)
+	go handleLatency(s, s.opts.LatencyInterval)
 	if err := conn.ConnectContext(ctx); err != nil {
 		s.logger.Debug("connection sequence failed", "err", err)
 		return err
@@ -115,9 +120,6 @@ func (s *Session) LoginContext(ctx context.Context) (err error) {
 		s.logger.Debug("startgame sequence failed", "err", err)
 		return err
 	}
-	go handleServer(s)
-	go handleClient(s)
-	go handleLatency(s, s.opts.LatencyInterval)
 	s.registry.AddSession(identityData.XUID, s)
 	s.logger.Info("logged in session")
 	return

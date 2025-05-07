@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -89,58 +88,52 @@ func NewConn(conn io.ReadWriteCloser, client *minecraft.Conn, logger *slog.Logge
 		connected: make(chan struct{}),
 	}
 	c.ctx, c.cancelFunc = context.WithCancelCause(client.Context())
-	go func() {
-	read:
-		for {
-			select {
-			case <-c.ctx.Done():
-				break read
-			case <-c.connected:
-				break read
-			default:
-				payload, err := c.read()
-				if err != nil {
-					c.CloseWithError(fmt.Errorf("failed to read connection sequence packet: %w", err))
-					c.logger.Error("failed to read connection sequence packet", "err", err)
-					break read
-				}
-
-				pk, ok := payload.(packet.Packet)
-				if !ok {
-					c.deferPacket(payload)
-					continue
-				}
-
-				if err := c.handlePacket(pk); err != nil {
-					c.CloseWithError(fmt.Errorf("failed to handle connection sequence packet: %w", err))
-					c.logger.Error("failed to handle connection sequence packet", "err", err)
-					break read
-				}
-			}
-		}
-	}()
+	c.expect(packet2.IDConnectionResponse)
 	return c
 }
 
 // ReadPacket reads the next available packet from the connection. If there are deferred packets, it will return
 // one of those first. This method should not be called concurrently from multiple goroutines.
 func (c *Conn) ReadPacket() (any, error) {
-	if len(c.deferredPackets) > 0 {
-		pk := c.deferredPackets[0]
-		c.deferredPackets[0] = nil
-		c.deferredPackets = c.deferredPackets[1:]
-		return pk, nil
+	select {
+	case <-c.ctx.Done():
+		return nil, context.Cause(c.ctx)
+	case <-c.connected:
+		if len(c.deferredPackets) > 0 {
+			pk := c.deferredPackets[0]
+			c.deferredPackets[0] = nil
+			c.deferredPackets = c.deferredPackets[1:]
+			return pk, nil
+		}
+		return c.read()
+	default:
 	}
-	return c.read()
+
+	pk, err := c.read()
+	if err != nil {
+		return nil, err
+	}
+
+	if pk, ok := pk.(packet.Packet); ok {
+		if err := c.handlePacket(pk); err != nil {
+			return nil, fmt.Errorf("failed to handle packet %v: %w", pk.ID(), err)
+		}
+	}
+	return c.ReadPacket()
 }
 
 // WritePacket encodes and writes the provided packet to the underlying connection.
 func (c *Conn) WritePacket(pk packet.Packet) error {
-	c.writerMu.Lock()
-	defer c.writerMu.Unlock()
+	select {
+	case <-c.ctx.Done():
+		return context.Cause(c.ctx)
+	default:
+	}
 
+	c.writerMu.Lock()
 	buf := internal.BufferPool.Get().(*bytes.Buffer)
 	defer func() {
+		c.writerMu.Unlock()
 		buf.Reset()
 		internal.BufferPool.Put(buf)
 	}()
@@ -176,14 +169,13 @@ func (c *Conn) ConnectTimeout(duration time.Duration) error {
 
 // ConnectContext initiates the connection sequence using the provided context for cancellation.
 func (c *Conn) ConnectContext(ctx context.Context) error {
-	c.expect(packet2.IDConnectionResponse)
 	if err := c.sendConnectionRequest(); err != nil {
 		return err
 	}
 
 	select {
 	case <-c.ctx.Done():
-		return net.ErrClosed
+		return context.Cause(c.ctx)
 	case <-ctx.Done():
 		return context.Cause(ctx)
 	case <-c.connected:
@@ -234,12 +226,6 @@ func (c *Conn) CloseWithError(err error) {
 // the decoding necessity. If decode is false and the packet does not require decoding,
 // it returns the raw decompressed payload.
 func (c *Conn) read() (pk any, err error) {
-	select {
-	case <-c.ctx.Done():
-		return nil, net.ErrClosed
-	default:
-	}
-
 	payload, err := c.reader.ReadPacket()
 	if err != nil {
 		return nil, err
