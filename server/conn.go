@@ -290,7 +290,7 @@ func (c *Conn) sendConnectionRequest() error {
 
 	err = c.WritePacket(&packet2.ConnectionRequest{
 		Addr:         c.client.RemoteAddr().String(),
-		ProtocolID:   c.client.Proto().ID(),
+		ProtocolID:   c.protocol.ID(),
 		ClientData:   clientData,
 		IdentityData: identityData,
 		Cache:        c.cache,

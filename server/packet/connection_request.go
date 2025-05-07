@@ -7,12 +7,12 @@ import "github.com/sandertv/gophertunnel/minecraft/protocol"
 type ConnectionRequest struct {
 	// Addr is the address of the player.
 	Addr string
-	// ProtocolID is the protocol version identifier of the player.
-	ProtocolID int32
 	// ClientData is the player's login.ClientData.
 	ClientData []byte
 	// IdentityData is the player's login.IdentityData.
 	IdentityData []byte
+	// ProtocolID is the protocol version identifier of the player.
+	ProtocolID int32
 	// Cache is optional data sent by the downstream server, intended to optimize
 	// communication between servers. This data can include shared information that
 	// is frequently used across multiple servers and can be used to avoid redundant
