@@ -24,10 +24,11 @@ func NewWriter(w io.Writer) *Writer {
 // Write writes a packet to the underlying io.Writer.
 // It prefixes the packet data with its length as an uint32 in big-endian order,
 // then writes the prefixed data to the underlying io.Writer.
-func (w *Writer) Write(data []byte) (err error) {
+func (w *Writer) Write(data []byte) error {
 	binary.BigEndian.PutUint32(w.p, uint32(len(data)))
-	if _, err := w.w.Write(append(w.p, data...)); err != nil {
+	if _, err := w.w.Write(w.p); err != nil {
 		return err
 	}
-	return
+	_, err := w.w.Write(data)
+	return err
 }
