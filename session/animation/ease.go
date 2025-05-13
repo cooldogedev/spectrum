@@ -4,7 +4,6 @@ import (
 	"image/color"
 	"time"
 
-	"github.com/cooldogedev/spectrum/internal"
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
@@ -112,7 +111,7 @@ func (animation *Ease) Clear(conn *minecraft.Conn, serverGameData minecraft.Game
 					Duration: 0.3,
 					Type:     protocol.EasingTypeInOutExpo,
 				}),
-				Position: protocol.Option(serverGameData.PlayerPosition.Add(internal.GetDirectionVec3(float64(serverGameData.Yaw)))),
+				Position: protocol.Option(serverGameData.PlayerPosition.Add(yawToDirectionVec(float64(serverGameData.Yaw)))),
 				Rotation: protocol.Option(mgl32.Vec2{serverGameData.Pitch, serverGameData.Yaw}),
 			}),
 		})

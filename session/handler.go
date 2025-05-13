@@ -26,10 +26,8 @@ loop:
 		server := s.Server()
 		select {
 		case <-server.Context().Done():
-			if err := s.fallback(); err != nil {
-				s.CloseWithError(fmt.Errorf("fallback failed: %w", err))
-				logError(s, "failed to fallback to a different server", err)
-				break loop
+			if !s.fallbackInProcess.Load() {
+				go s.fallback()
 			}
 			continue loop
 		default:

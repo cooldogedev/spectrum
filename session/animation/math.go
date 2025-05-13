@@ -1,4 +1,4 @@
-package internal
+package animation
 
 import (
 	"math"
@@ -6,13 +6,13 @@ import (
 	"github.com/go-gl/mathgl/mgl32"
 )
 
-func GetDirectionVec3(angle float64) mgl32.Vec3 {
-	angle = math.Mod(angle, 360)
-	if angle < 0 {
-		angle += 360
+func yawToDirectionVec(yaw float64) mgl32.Vec3 {
+	yaw = math.Mod(yaw, 360)
+	if yaw < 0 {
+		yaw += 360
 	}
 
-	radians := angle * (math.Pi / 180)
+	radians := yaw * (math.Pi / 180)
 	x := math.Cos(radians)
 	y := math.Sin(radians)
 	if y >= 0 && math.Abs(x) <= 0.5 {

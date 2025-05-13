@@ -8,9 +8,14 @@ import (
 	"sync"
 
 	"github.com/cooldogedev/spectrum/api/packet"
-	"github.com/cooldogedev/spectrum/internal"
 	"github.com/cooldogedev/spectrum/protocol"
 )
+
+var bufferPool = sync.Pool{
+	New: func() any {
+		return bytes.NewBuffer(make([]byte, 0, 128))
+	},
+}
 
 // Client represents a connection to the API service, managing packet reading and writing
 // over an underlying net.Conn.
@@ -67,10 +72,10 @@ func (c *Client) WritePacket(pk packet.Packet) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	buf := internal.BufferPool.Get().(*bytes.Buffer)
+	buf := bufferPool.Get().(*bytes.Buffer)
 	defer func() {
 		buf.Reset()
-		internal.BufferPool.Put(buf)
+		bufferPool.Put(buf)
 	}()
 
 	if err := binary.Write(buf, binary.LittleEndian, pk.ID()); err != nil {
