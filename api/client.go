@@ -22,9 +22,9 @@ type Client struct {
 	mu     sync.Mutex
 }
 
-// NewClient creates a new Client instance using the provided net.Conn.
+// newClient creates a new Client instance using the provided net.Conn.
 // It is used for reading and writing packets to the underlying connection.
-func NewClient(conn net.Conn, pool packet.Pool) *Client {
+func newClient(conn net.Conn, pool packet.Pool) *Client {
 	return &Client{
 		conn: conn,
 		pool: pool,

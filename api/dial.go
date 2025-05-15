@@ -17,7 +17,7 @@ func Dial(addr, token string) (c *Client, err error) {
 		return nil, err
 	}
 
-	c = NewClient(conn, packet.NewPool())
+	c = newClient(conn, packet.NewPool())
 	defer func() {
 		if err != nil {
 			_ = c.Close()

@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"sync"
 
 	"github.com/cooldogedev/spectrum/api/packet"
 	"github.com/cooldogedev/spectrum/session"
@@ -21,9 +22,13 @@ type API struct {
 	handlers       map[uint32]handler
 	registry       *session.Registry
 
-	closed   chan struct{}
 	listener net.Listener
-	logger   *slog.Logger
+	clients  map[int64]*Client
+	nextId   int64
+
+	logger *slog.Logger
+	closed chan struct{}
+	mu     sync.RWMutex
 }
 
 // NewAPI creates a new API service instance using the provided session.Registry.
@@ -33,8 +38,8 @@ func NewAPI(registry *session.Registry, logger *slog.Logger, authentication Auth
 		handlers:       map[uint32]handler{},
 		registry:       registry,
 
-		closed: make(chan struct{}),
 		logger: logger,
+		closed: make(chan struct{}),
 	}
 	a.RegisterHandler(packet.IDKick, func(_ *Client, pk packet.Packet) {
 		username := pk.(*packet.Kick).Username
@@ -85,7 +90,13 @@ func (a *API) Accept() (err error) {
 		_ = conn.SetReadBuffer(1024 * 1024 * 8)
 		_ = conn.SetWriteBuffer(1024 * 1024 * 8)
 	}
-	go a.handle(conn)
+	a.mu.Lock()
+	id := a.nextId
+	c := newClient(conn, packet.NewPool())
+	a.clients[id] = c
+	a.nextId++
+	a.mu.Unlock()
+	go a.handle(c, id)
 	return
 }
 
@@ -94,48 +105,60 @@ func (a *API) RegisterHandler(packet uint32, h handler) {
 	a.handlers[packet] = h
 }
 
+// Clients returns a slice of all currently connected clients.
+func (a *API) Clients() []*Client {
+	a.mu.RLock()
+	clients := make([]*Client, 0, len(a.clients))
+	for _, client := range a.clients {
+		clients = append(clients, client)
+	}
+	a.mu.RUnlock()
+	return clients
+}
+
 // Close closes the listener and all connected clients.
-func (a *API) Close() (err error) {
+func (a *API) Close() error {
 	select {
 	case <-a.closed:
 		return errors.New("already closed")
 	default:
-		close(a.closed)
-		if a.listener != nil {
-			_ = a.listener.Close()
-		}
-		return
 	}
+
+	close(a.closed)
+	if a.listener != nil {
+		_ = a.listener.Close()
+	}
+	return nil
 }
 
 // handle manages the provided client connection, handling authentication and packet processing.
-func (a *API) handle(conn net.Conn) {
-	identifier := conn.RemoteAddr().String()
-	a.logger.Debug("accepted connection", "addr", identifier)
-
-	c := NewClient(conn, packet.NewPool())
+func (a *API) handle(c *Client, id int64) {
+	addr := c.conn.RemoteAddr().String()
 	defer func() {
+		a.mu.Lock()
+		delete(a.clients, id)
+		a.mu.Unlock()
 		_ = c.Close()
-		a.logger.Info("disconnected connection", "addr", identifier)
+		a.logger.Info("disconnected connection", "addr", addr)
 	}()
 
 	connectionRequestPacket, err := c.ReadPacket()
 	if err != nil {
 		_ = c.WritePacket(&packet.ConnectionResponse{Response: packet.ResponseFail})
-		a.logger.Error("failed to read connection request", "addr", identifier, "err", err)
+		a.logger.Error("failed to read connection request", "addr", addr, "err", err)
 		return
 	}
 
 	connectionRequest, ok := connectionRequestPacket.(*packet.ConnectionRequest)
 	if !ok {
 		_ = c.WritePacket(&packet.ConnectionResponse{Response: packet.ResponseFail})
-		a.logger.Error("expected connection request", "addr", identifier, "pid", connectionRequestPacket.ID())
+		a.logger.Error("expected connection request", "addr", addr, "pid", connectionRequestPacket.ID())
 		return
 	}
 
 	if a.authentication != nil && !a.authentication.Authenticate(connectionRequest.Token) {
 		_ = c.WritePacket(&packet.ConnectionResponse{Response: packet.ResponseUnauthorized})
-		a.logger.Error("unauthorized connection", "addr", identifier, "token", connectionRequest.Token)
+		a.logger.Error("unauthorized connection", "addr", addr, "token", connectionRequest.Token)
 		return
 	}
 
@@ -144,25 +167,26 @@ func (a *API) handle(conn net.Conn) {
 		return
 	}
 
-	a.logger.Info("successfully authorized connection", "addr", identifier)
+	a.logger.Info("successfully authorized connection", "addr", addr)
 	for {
 		select {
 		case <-a.closed:
 			return
 		default:
-			pk, err := c.ReadPacket()
-			if err != nil {
-				if !errors.Is(err, io.EOF) {
-					a.logger.Error("failed to read packet", "addr", identifier, "err", err)
-				}
-				return
-			}
-
-			if h, ok := a.handlers[pk.ID()]; ok {
-				h(c, pk)
-				continue
-			}
-			a.logger.Error("received an unhandled packet", "addr", identifier, "pid", pk.ID())
 		}
+
+		pk, err := c.ReadPacket()
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				a.logger.Error("failed to read packet", "addr", addr, "err", err)
+			}
+			return
+		}
+
+		if h, ok := a.handlers[pk.ID()]; ok {
+			h(c, pk)
+			continue
+		}
+		a.logger.Error("received an unhandled packet", "addr", addr, "pid", pk.ID())
 	}
 }
