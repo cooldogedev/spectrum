@@ -38,6 +38,8 @@ func NewAPI(registry *session.Registry, logger *slog.Logger, authentication Auth
 		handlers:       map[uint32]handler{},
 		registry:       registry,
 
+		clients: make(map[int64]*Client),
+
 		logger: logger,
 		closed: make(chan struct{}),
 	}
