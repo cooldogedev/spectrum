@@ -43,3 +43,9 @@ The `Processor` interface in Spectrum handles incoming and outgoing packets with
 - **Stateless**: Simplifies scalability with a stateless design, enhancing flexibility and efficiency in server management by not keeping track of registered servers within the proxy. Transfer between servers is as easy as sending Spectrum's transfer packet to the player from downstream servers.
 
 - **Deterministic**: Takes a unique approach by sidestepping entity translations altogether, relying solely on deterministic entity identifiers provided by the downstream servers.
+
+## Additional Notes
+- **Kernel Network Buffer Tuning (Linux):** Under high load or on systems with conservative default settings, the standard Linux kernel network buffer sizes may be insufficient to handle incoming traffic and will cause the proxy to throw errors or disconnect randomly. Example commands provided below show how to increase these buffer sizes to ~7.5MB (adjust to your needs):
+  - `sysctl -w net.core.rmem_max=7500000`
+  - `sysctl -w net.core.wmem_max=7500000`
+  - `sysctl -w net.ipv4.tcp_rmem="4096 87380 7500000"`
