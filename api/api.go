@@ -45,7 +45,7 @@ func NewAPI(registry *session.Registry, logger *slog.Logger, authentication Auth
 	}
 	a.RegisterHandler(packet.IDKick, func(_ *Client, pk packet.Packet) {
 		username := pk.(*packet.Kick).Username
-		reason := pk.(*packet.Kick).Username
+		reason := pk.(*packet.Kick).Reason
 		if s := a.registry.GetSessionByUsername(username); s != nil {
 			s.Disconnect(reason)
 		} else {
