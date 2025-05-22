@@ -67,16 +67,6 @@ func (t *tracker) handlePacket(pk packet.Packet) {
 	}
 }
 
-func (t *tracker) clearAll(s *Session) {
-	t.mu.Lock()
-	t.clearEffects(s)
-	t.clearEntities(s)
-	t.clearBossBars(s)
-	t.clearPlayers(s)
-	t.clearScoreboards(s)
-	t.mu.Unlock()
-}
-
 func (t *tracker) clearBossBars(s *Session) {
 	t.bossBars.Each(func(i int64) bool {
 		_ = s.client.WritePacket(&packet.BossEvent{

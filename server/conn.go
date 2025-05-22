@@ -46,9 +46,8 @@ type Conn struct {
 	client *minecraft.Conn
 	logger *slog.Logger
 
-	reader   *protocol.Reader
-	writer   *protocol.Writer
-	writerMu sync.Mutex
+	reader *protocol.Reader
+	writer *protocol.Writer
 
 	runtimeID uint64
 	uniqueID  int64
@@ -142,11 +141,9 @@ func (c *Conn) WritePacket(pk packet.Packet) error {
 	default:
 	}
 
-	c.writerMu.Lock()
 	buf := bufferPool.Get().(*bytes.Buffer)
 	header := headerPool.Get().(*packet.Header)
 	defer func() {
-		c.writerMu.Unlock()
 		buf.Reset()
 		bufferPool.Put(buf)
 		headerPool.Put(header)
@@ -162,8 +159,6 @@ func (c *Conn) WritePacket(pk packet.Packet) error {
 
 // Write writes provided byte slice to the underlying connection.
 func (c *Conn) Write(p []byte) error {
-	c.writerMu.Lock()
-	defer c.writerMu.Unlock()
 	return c.writer.Write(snappy.Encode(nil, p))
 }
 
