@@ -48,7 +48,7 @@ type Processor interface {
 	// ProcessCache is called before updating the session's cache.
 	ProcessCache(ctx *Context, new *[]byte)
 	// ProcessDisconnection is called when the player disconnects from the proxy.
-	ProcessDisconnection(ctx *Context)
+	ProcessDisconnection(ctx *Context, message *string)
 }
 
 // NopProcessor is a no-operation implementation of the Processor interface.
@@ -67,4 +67,4 @@ func (NopProcessor) ProcessPreTransfer(_ *Context, _ *string, _ *string)     {}
 func (NopProcessor) ProcessTransferFailure(_ *Context, _ *string, _ *string) {}
 func (NopProcessor) ProcessPostTransfer(_ *Context, _ *string, _ *string)    {}
 func (NopProcessor) ProcessCache(_ *Context, _ *[]byte)                      {}
-func (NopProcessor) ProcessDisconnection(_ *Context)                         {}
+func (NopProcessor) ProcessDisconnection(_ *Context, _ *string)              {}

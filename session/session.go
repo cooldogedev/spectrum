@@ -273,9 +273,10 @@ func (s *Session) Close() (err error) {
 
 func (s *Session) CloseWithError(err error) {
 	s.once.Do(func() {
-		_ = s.client.WritePacket(&packet.Disconnect{Message: err.Error()})
+		message := err.Error()
+		s.Processor().ProcessDisconnection(NewContext(), &message)
+		_ = s.client.WritePacket(&packet.Disconnect{Message: message})
 		_ = s.client.Close()
-		s.Processor().ProcessDisconnection(NewContext())
 		s.serverMu.RLock()
 		if s.serverConn != nil {
 			s.serverConn.CloseWithError(err)
