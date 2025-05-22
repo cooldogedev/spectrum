@@ -335,7 +335,6 @@ func (s *Session) fallback() {
 		return
 	}
 	s.logger.Info("transferred session to a fallback server", "addr", addr)
-	return
 }
 
 func (s *Session) sendMetadata(noAI bool) {
