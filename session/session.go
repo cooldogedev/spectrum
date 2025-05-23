@@ -43,11 +43,10 @@ type Session struct {
 	processor   Processor
 	processorMu sync.RWMutex
 
-	cache             atomic.Value
-	latency           atomic.Int64
-	transferring      atomic.Bool
-	fallbackInProcess atomic.Bool
-	once              sync.Once
+	cache      atomic.Value
+	latency    atomic.Int64
+	inFallback atomic.Bool
+	once       sync.Once
 }
 
 // NewSession creates a new Session instance using the provided minecraft.Conn.
@@ -103,14 +102,16 @@ func (s *Session) LoginContext(ctx context.Context) (err error) {
 		return err
 	}
 
-	s.serverMu.Lock()
-	s.serverAddr = serverAddr
-	s.serverConn = conn
-	s.serverMu.Unlock()
 	go handleServer(s)
 	go handleClient(s)
 	go handleLatency(s, s.opts.LatencyInterval)
-	if err := conn.ConnectContext(ctx); err != nil {
+	if err := conn.DoConnect(); err != nil {
+		s.logger.Debug("connection sequence failed", "err", err)
+		return err
+	}
+
+	if err := conn.WaitConnect(s.ctx); err != nil {
+		conn.CloseWithError(fmt.Errorf("connection sequence failed: %w", err))
 		s.logger.Debug("connection sequence failed", "err", err)
 		return err
 	}
@@ -151,49 +152,45 @@ func (s *Session) TransferTimeout(addr string, duration time.Duration) (err erro
 // occurs at a time, returning an error if another transfer is already in progress.
 // The process is performed using the provided context for cancellation.
 func (s *Session) TransferContext(ctx context.Context, addr string) (err error) {
-	if !s.transferring.CompareAndSwap(false, true) {
-		return errors.New("already transferring")
-	}
-
-	defer s.transferring.Store(false)
+	s.serverMu.RLock()
+	origin := s.serverAddr
+	s.serverMu.RUnlock()
 	processorCtx := NewContext()
-	s.Processor().ProcessPreTransfer(processorCtx, &s.serverAddr, &addr)
+	s.Processor().ProcessPreTransfer(processorCtx, &origin, &addr)
 	if processorCtx.Cancelled() {
 		return errors.New("processor failed")
 	}
 
-	s.serverMu.RLock()
-	origin := s.serverAddr
-	s.serverMu.RUnlock()
 	s.sendMetadata(true)
 	conn, err := s.dial(ctx, addr)
-	defer func() {
-		if err != nil {
-			s.sendMetadata(false)
-			s.Processor().ProcessTransferFailure(NewContext(), &s.serverAddr, &addr)
-		}
-	}()
 	if err != nil {
-		s.logger.Debug("dialer failed", "err", err)
-		return err
+		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+		return fmt.Errorf("dialer failed: %w", err)
 	}
 
-	if err := conn.ConnectContext(ctx); err != nil {
-		conn.CloseWithError(fmt.Errorf("connection sequence failed: %w", err))
-		s.logger.Debug("connection sequence failed", "err", err)
-		return err
+	if err := conn.DoConnect(); err != nil {
+		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+		return fmt.Errorf("connection sequence failed failed: %w", err)
 	}
 
-	gameData := conn.GameData()
-	s.animation.Play(s.client, gameData)
-	s.sendGameData(conn.GameData())
-	if err := conn.DoSpawn(); err != nil {
-		conn.CloseWithError(fmt.Errorf("spawn sequence failed: %w", err))
-		return err
-	}
-	s.animation.Clear(s.client, gameData)
-	s.Processor().ProcessPostTransfer(NewContext(), &origin, &addr)
-	s.logger.Debug("transferred session", "origin", origin, "target", addr)
+	conn.OnConnect(func(err error) {
+		if err != nil {
+			s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+			return
+		}
+
+		gameData := conn.GameData()
+		s.animation.Play(s.client, gameData)
+		s.sendGameData(conn.GameData())
+		if err := conn.DoSpawn(); err != nil {
+			s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+			return
+		}
+		s.inFallback.Store(false)
+		s.animation.Clear(s.client, gameData)
+		s.Processor().ProcessPostTransfer(NewContext(), &origin, &addr)
+		s.logger.Debug("transferred session", "origin", origin, "target", addr)
+	})
 	return nil
 }
 
@@ -283,7 +280,7 @@ func (s *Session) CloseWithError(err error) {
 		}
 		s.serverMu.RUnlock()
 		s.registry.RemoveSession(s.client.IdentityData().XUID)
-		s.logger.Info("closed session")
+		s.logger.Info("closed session", "err", err)
 	})
 }
 
@@ -313,29 +310,27 @@ func (s *Session) dial(ctx context.Context, addr string) (*server.Conn, error) {
 }
 
 // fallback attempts to transfer the session to a fallback server provided by the discovery.
-func (s *Session) fallback() {
+func (s *Session) fallback() error {
 	select {
 	case <-s.ctx.Done():
-		return
+		return context.Cause(s.ctx)
 	default:
 	}
 
-	if !s.fallbackInProcess.CompareAndSwap(false, true) {
-		return
+	if !s.inFallback.CompareAndSwap(false, true) {
+		return errors.New("already in fallback")
 	}
 
-	defer s.fallbackInProcess.Store(false)
 	addr, err := s.discovery.DiscoverFallback(s.client)
 	if err != nil {
-		s.CloseWithError(err)
-		return
+		return fmt.Errorf("discovery failed: %w", err)
 	}
 
+	s.logger.Debug("transferring session to a fallback server", "addr", addr)
 	if err := s.Transfer(addr); err != nil {
-		s.CloseWithError(fmt.Errorf("failed to transfer to fallback server: %w", err))
-		return
+		return fmt.Errorf("transfer failed: %w", err)
 	}
-	s.logger.Info("transferred session to a fallback server", "addr", addr)
+	return nil
 }
 
 func (s *Session) sendMetadata(noAI bool) {

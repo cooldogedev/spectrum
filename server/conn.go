@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"slices"
 	"sync"
-	"time"
 
 	"github.com/cooldogedev/spectrum/protocol"
 	spectrumpacket "github.com/cooldogedev/spectrum/server/packet"
@@ -64,6 +63,8 @@ type Conn struct {
 	deferredPackets []any
 	expectedIds     []uint32
 
+	onConnect func(err error)
+
 	connected chan struct{}
 	spawned   chan struct{}
 	once      sync.Once
@@ -96,7 +97,7 @@ func NewConn(conn io.ReadWriteCloser, client *minecraft.Conn, logger *slog.Logge
 		connected: make(chan struct{}),
 		spawned:   make(chan struct{}),
 	}
-	c.ctx, c.cancelFunc = context.WithCancelCause(client.Context())
+	c.ctx, c.cancelFunc = context.WithCancelCause(context.Background())
 	c.expect(spectrumpacket.IDConnectionResponse)
 	return c
 }
@@ -162,26 +163,45 @@ func (c *Conn) Write(p []byte) error {
 	return c.writer.Write(snappy.Encode(nil, p))
 }
 
-// Connect initiates the connection sequence with a default timeout of 1 minute.
-func (c *Conn) Connect() error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	return c.ConnectContext(ctx)
-}
+// DoConnect sends a ConnectionRequest packet to initiate the connection sequence.
+func (c *Conn) DoConnect() error {
+	select {
+	case <-c.ctx.Done():
+		return context.Cause(c.ctx)
+	default:
+	}
 
-// ConnectTimeout initiates the connection sequence with the specified timeout duration.
-func (c *Conn) ConnectTimeout(duration time.Duration) error {
-	ctx, cancel := context.WithTimeout(context.Background(), duration)
-	defer cancel()
-	return c.ConnectContext(ctx)
-}
-
-// ConnectContext initiates the connection sequence using the provided context for cancellation.
-func (c *Conn) ConnectContext(ctx context.Context) error {
-	if err := c.sendConnectionRequest(); err != nil {
+	clientData, err := json.Marshal(c.client.ClientData())
+	if err != nil {
 		return err
 	}
 
+	identityData, err := json.Marshal(c.client.IdentityData())
+	if err != nil {
+		return err
+	}
+
+	err = c.WritePacket(&spectrumpacket.ConnectionRequest{
+		Addr:         c.client.RemoteAddr().String(),
+		ProtocolID:   c.protocol.ID(),
+		ClientData:   clientData,
+		IdentityData: identityData,
+		Cache:        c.cache,
+	})
+	if err != nil {
+		return err
+	}
+	c.logger.Debug("sent connection_request, expecting connection_response")
+	return nil
+}
+
+// OnConnect invokes the provided function once the connection sequence is complete or has failed.
+func (c *Conn) OnConnect(fn func(error)) {
+	c.onConnect = fn
+}
+
+// WaitConnect blocks until the connection sequence has completed or the provided context is canceled.
+func (c *Conn) WaitConnect(ctx context.Context) error {
 	select {
 	case <-c.ctx.Done():
 		return context.Cause(c.ctx)
@@ -202,14 +222,6 @@ func (c *Conn) DoSpawn() error {
 	}
 	close(c.spawned)
 	return c.WritePacket(&packet.SetLocalPlayerAsInitialised{EntityRuntimeID: c.runtimeID})
-}
-
-// Conn returns the underlying connection.
-// Direct access to the underlying connection through this method is
-// strongly discouraged due to the potential for unpredictable behavior.
-// Use this method only when absolutely necessary.
-func (c *Conn) Conn() io.ReadWriteCloser {
-	return c.conn
 }
 
 // GameData returns the game data set for the connection by the StartGame packet.
@@ -237,6 +249,16 @@ func (c *Conn) Close() error {
 // CloseWithError closes the underlying connection.
 func (c *Conn) CloseWithError(err error) {
 	c.once.Do(func() {
+		var connected bool
+		select {
+		case <-c.connected:
+			connected = true
+		default:
+		}
+
+		if !connected && c.onConnect != nil {
+			c.onConnect(err)
+		}
 		c.cancelFunc(err)
 		_ = c.conn.Close()
 	})
@@ -294,32 +316,6 @@ func (c *Conn) deferPacket(pk any) {
 // expect stores packet IDs that will be read and handled before finalizing the connection sequence.
 func (c *Conn) expect(ids ...uint32) {
 	c.expectedIds = ids
-}
-
-// sendConnectionRequest initiates the connection sequence by sending a ConnectionRequest packet to the underlying connection.
-func (c *Conn) sendConnectionRequest() error {
-	clientData, err := json.Marshal(c.client.ClientData())
-	if err != nil {
-		return err
-	}
-
-	identityData, err := json.Marshal(c.client.IdentityData())
-	if err != nil {
-		return err
-	}
-
-	err = c.WritePacket(&spectrumpacket.ConnectionRequest{
-		Addr:         c.client.RemoteAddr().String(),
-		ProtocolID:   c.protocol.ID(),
-		ClientData:   clientData,
-		IdentityData: identityData,
-		Cache:        c.cache,
-	})
-	if err != nil {
-		return err
-	}
-	c.logger.Debug("sent connection_request, expecting connection_response")
-	return nil
 }
 
 // handlePacket handles an expected packet that was received before the connection sequence finalization.
@@ -441,6 +437,9 @@ func (c *Conn) handleChunkRadiusUpdated(pk *packet.ChunkRadiusUpdated) error {
 func (c *Conn) handlePlayStatus(pk *packet.PlayStatus) error {
 	c.deferPacket(pk)
 	close(c.connected)
+	if c.onConnect != nil {
+		c.onConnect(nil)
+	}
 	c.logger.Debug("received play_status, finalizing connection sequence")
 	return nil
 }
