@@ -24,18 +24,13 @@ loop:
 		}
 
 		server := s.Server()
-		select {
-		case <-server.Context().Done():
-			if !s.fallbackInProcess.Load() {
-				go s.fallback()
-			}
-			continue loop
-		default:
-		}
-
 		pk, err := server.ReadPacket()
 		if err != nil {
 			server.CloseWithError(fmt.Errorf("failed to read packet from server: %w", err))
+			if err := s.fallback(); err != nil {
+				s.CloseWithError(fmt.Errorf("fallback failed: %w", err))
+				break loop
+			}
 			continue loop
 		}
 
