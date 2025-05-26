@@ -26,6 +26,10 @@ loop:
 		server := s.Server()
 		pk, err := server.ReadPacket()
 		if err != nil {
+			if server != s.Server() {
+				continue loop
+			}
+
 			server.CloseWithError(fmt.Errorf("failed to read packet from server: %w", err))
 			if err := s.fallback(); err != nil {
 				s.CloseWithError(fmt.Errorf("fallback failed: %w", err))
