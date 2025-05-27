@@ -357,15 +357,16 @@ func (c *Conn) handlePacket(p packet.Packet) (err error) {
 
 // handleConnectionResponse handles the ConnectionResponse packet.
 func (c *Conn) handleConnectionResponse(pk *spectrumpacket.ConnectionResponse) error {
+	c.logger.Debug("received connection_response, expecting start_game")
 	c.expect(packet.IDStartGame)
 	c.runtimeID = pk.RuntimeID
 	c.uniqueID = pk.UniqueID
-	c.logger.Debug("received connection_response, expecting start_game")
 	return nil
 }
 
 // handleStartGame handles the StartGame packet.
 func (c *Conn) handleStartGame(pk *packet.StartGame) error {
+	c.logger.Debug("received start_game, expecting item_registry")
 	c.expect(packet.IDItemRegistry)
 	c.gameData = minecraft.GameData{
 		Difficulty:                   pk.Difficulty,
@@ -400,12 +401,12 @@ func (c *Conn) handleStartGame(pk *packet.StartGame) error {
 		Experiments:                  pk.Experiments,
 		UseBlockNetworkIDHashes:      pk.UseBlockNetworkIDHashes,
 	}
-	c.logger.Debug("received start_game, expecting item_registry")
 	return nil
 }
 
 // handleItemRegistry handles the ItemRegistry packet.
 func (c *Conn) handleItemRegistry(pk *packet.ItemRegistry) error {
+	c.logger.Debug("received item_registry, expecting chunk_radius_updated")
 	c.deferPacket(pk)
 	c.expect(packet.IDChunkRadiusUpdated)
 	c.gameData.Items = pk.Items
@@ -418,28 +419,27 @@ func (c *Conn) handleItemRegistry(pk *packet.ItemRegistry) error {
 	if err := c.WritePacket(&packet.RequestChunkRadius{ChunkRadius: 16}); err != nil {
 		return err
 	}
-	c.logger.Debug("received item_registry, expecting chunk_radius_updated")
 	return nil
 }
 
 // handleChunkRadiusUpdated handles the first ChunkRadiusUpdated packet, which updates the initial chunk
 // radius of the connection.
 func (c *Conn) handleChunkRadiusUpdated(pk *packet.ChunkRadiusUpdated) error {
+	c.logger.Debug("received chunk_radius_updated, expecting play_status")
 	c.deferPacket(pk)
 	c.expect(packet.IDPlayStatus)
 	c.gameData.ChunkRadius = pk.ChunkRadius
-	c.logger.Debug("received chunk_radius_updated, expecting play_status")
 	return nil
 }
 
 // handlePlayStatus handles the first PlayStatus packet. It is the final packet in the connection sequence,
 // it responds to the server with a packet.SetLocalPlayerAsInitialised to finalize the connection sequence and spawn the player.
 func (c *Conn) handlePlayStatus(pk *packet.PlayStatus) error {
+	c.logger.Debug("received play_status, finalizing connection sequence")
 	c.deferPacket(pk)
 	close(c.connected)
 	if c.onConnect != nil {
 		c.onConnect(nil)
 	}
-	c.logger.Debug("received play_status, finalizing connection sequence")
 	return nil
 }
