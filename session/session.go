@@ -321,15 +321,30 @@ func (s *Session) fallback() error {
 		return errors.New("already in fallback")
 	}
 
+	s.serverMu.RLock()
+	origin := s.serverAddr
+	s.serverMu.RUnlock()
+
+	processorCtx := NewContext()
+
 	addr, err := s.discovery.DiscoverFallback(s.client)
 	if err != nil {
+		s.Processor().ProcessFallbackFailure(processorCtx, &origin, nil, err)
 		return fmt.Errorf("discovery failed: %w", err)
+	}
+
+	s.Processor().ProcessPreFallback(processorCtx, &origin, &addr)
+	if processorCtx.Cancelled() {
+		return errors.New("processor failed")
 	}
 
 	s.logger.Debug("transferring session to a fallback server", "addr", addr)
 	if err := s.Transfer(addr); err != nil {
+		s.Processor().ProcessFallbackFailure(processorCtx, &origin, &addr, err)
 		return fmt.Errorf("transfer failed: %w", err)
 	}
+
+	s.Processor().ProcessPostFallback(processorCtx, &origin, &addr)
 	return nil
 }
 
