@@ -31,17 +31,6 @@ loop:
 			}
 
 			server.CloseWithError(fmt.Errorf("failed to read packet from server: %w", err))
-
-			s.serverMu.RLock()
-			origin := s.serverAddr
-			s.serverMu.RUnlock()
-
-			ctx := NewContext()
-			s.Processor().ProcessFallback(ctx, &origin, err)
-			if ctx.Cancelled() {
-				continue loop
-			}
-
 			if err := s.fallback(); err != nil {
 				s.CloseWithError(fmt.Errorf("fallback failed: %w", err))
 				break loop
