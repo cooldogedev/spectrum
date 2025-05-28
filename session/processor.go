@@ -49,6 +49,8 @@ type Processor interface {
 	ProcessCache(ctx *Context, new *[]byte)
 	// ProcessDisconnection is called when the player disconnects from the proxy.
 	ProcessDisconnection(ctx *Context, message *string)
+	// ProcessFallback is called when a fallback is triggered due to a server error from the given origin.
+	ProcessFallback(ctx *Context, origin *string, err error)
 }
 
 // NopProcessor is a no-operation implementation of the Processor interface.
@@ -68,3 +70,4 @@ func (NopProcessor) ProcessTransferFailure(_ *Context, _ *string, _ *string) {}
 func (NopProcessor) ProcessPostTransfer(_ *Context, _ *string, _ *string)    {}
 func (NopProcessor) ProcessCache(_ *Context, _ *[]byte)                      {}
 func (NopProcessor) ProcessDisconnection(_ *Context, _ *string)              {}
+func (NopProcessor) ProcessFallback(_ *Context, _ *string, _ error)          {}
