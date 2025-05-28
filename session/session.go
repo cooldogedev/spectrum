@@ -164,18 +164,18 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 	s.sendMetadata(true)
 	conn, err := s.dial(ctx, addr)
 	if err != nil {
-		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr, err)
 		return fmt.Errorf("dialer failed: %w", err)
 	}
 
 	if err := conn.DoConnect(); err != nil {
-		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr, err)
 		return fmt.Errorf("connection sequence failed failed: %w", err)
 	}
 
 	conn.OnConnect(func(err error) {
 		if err != nil {
-			s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+			s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr, err)
 			return
 		}
 
@@ -183,7 +183,7 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 		s.animation.Play(s.client, gameData)
 		s.sendGameData(conn.GameData())
 		if err := conn.DoSpawn(); err != nil {
-			s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+			s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr, err)
 			return
 		}
 		s.inFallback.Store(false)
