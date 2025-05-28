@@ -42,7 +42,7 @@ type Processor interface {
 	// ProcessPreTransfer is called before transferring the player to a different server.
 	ProcessPreTransfer(ctx *Context, origin *string, target *string)
 	// ProcessTransferFailure is called when the player transfer to a different server fails.
-	ProcessTransferFailure(ctx *Context, origin *string, target *string)
+	ProcessTransferFailure(ctx *Context, origin *string, target *string, err error)
 	// ProcessPostTransfer is called after transferring the player to a different server.
 	ProcessPostTransfer(ctx *Context, origin *string, target *string)
 	// ProcessCache is called before updating the session's cache.
@@ -57,14 +57,14 @@ type NopProcessor struct{}
 // Ensure that NopProcessor satisfies the Processor interface.
 var _ Processor = NopProcessor{}
 
-func (NopProcessor) ProcessStartGame(_ *Context, _ *minecraft.GameData)      {}
-func (NopProcessor) ProcessServer(_ *Context, _ *packet.Packet)              {}
-func (NopProcessor) ProcessServerEncoded(_ *Context, _ *[]byte)              {}
-func (NopProcessor) ProcessClient(_ *Context, _ *packet.Packet)              {}
-func (NopProcessor) ProcessClientEncoded(_ *Context, _ *[]byte)              {}
-func (NopProcessor) ProcessFlush(_ *Context)                                 {}
-func (NopProcessor) ProcessPreTransfer(_ *Context, _ *string, _ *string)     {}
-func (NopProcessor) ProcessTransferFailure(_ *Context, _ *string, _ *string) {}
-func (NopProcessor) ProcessPostTransfer(_ *Context, _ *string, _ *string)    {}
-func (NopProcessor) ProcessCache(_ *Context, _ *[]byte)                      {}
-func (NopProcessor) ProcessDisconnection(_ *Context, _ *string)              {}
+func (NopProcessor) ProcessStartGame(_ *Context, _ *minecraft.GameData)               {}
+func (NopProcessor) ProcessServer(_ *Context, _ *packet.Packet)                       {}
+func (NopProcessor) ProcessServerEncoded(_ *Context, _ *[]byte)                       {}
+func (NopProcessor) ProcessClient(_ *Context, _ *packet.Packet)                       {}
+func (NopProcessor) ProcessClientEncoded(_ *Context, _ *[]byte)                       {}
+func (NopProcessor) ProcessFlush(_ *Context)                                          {}
+func (NopProcessor) ProcessPreTransfer(_ *Context, _ *string, _ *string)              {}
+func (NopProcessor) ProcessTransferFailure(_ *Context, _ *string, _ *string, _ error) {}
+func (NopProcessor) ProcessPostTransfer(_ *Context, _ *string, _ *string)             {}
+func (NopProcessor) ProcessCache(_ *Context, _ *[]byte)                               {}
+func (NopProcessor) ProcessDisconnection(_ *Context, _ *string)                       {}
