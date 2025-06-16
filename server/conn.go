@@ -183,7 +183,7 @@ func (c *Conn) DoConnect() error {
 
 	err = c.WritePacket(&spectrumpacket.ConnectionRequest{
 		Addr:         c.client.RemoteAddr().String(),
-		ProtocolID:   c.protocol.ID(),
+		ProtocolID:   c.client.Proto().ID(),
 		ClientData:   clientData,
 		IdentityData: identityData,
 		Cache:        c.cache,
