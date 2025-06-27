@@ -9,7 +9,7 @@ require (
 	github.com/go-gl/mathgl v1.2.0
 	github.com/golang/snappy v1.0.0
 	github.com/quic-go/quic-go v0.51.0
-	github.com/sandertv/gophertunnel v1.46.0
+	github.com/sandertv/gophertunnel v1.47.6
 	github.com/scylladb/go-set v1.0.2
 )
 
@@ -22,6 +22,7 @@ require (
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/muhammadmuzzammil1998/jsonc v1.0.0 // indirect
 	github.com/onsi/ginkgo/v2 v2.23.4 // indirect
+	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/sandertv/go-raknet v1.14.3-0.20250305181847-6af3e95113d6 // indirect
 	go.uber.org/automaxprocs v1.6.0 // indirect
 	go.uber.org/mock v0.5.2 // indirect
