@@ -274,11 +274,10 @@ func (s *Session) CloseWithError(err error) {
 		s.Processor().ProcessDisconnection(NewContext(), &message)
 		_ = s.client.WritePacket(&packet.Disconnect{Message: message})
 		_ = s.client.Close()
-		s.serverMu.RLock()
-		if s.serverConn != nil {
-			s.serverConn.CloseWithError(err)
+		if conn := s.Server(); conn != nil {
+			conn.CloseWithError(err)
 		}
-		s.serverMu.RUnlock()
+		s.cancelFunc(err)
 		s.registry.RemoveSession(s.client.IdentityData().XUID)
 		s.logger.Info("closed session", "err", err)
 	})
