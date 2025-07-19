@@ -110,7 +110,7 @@ func (s *Session) LoginContext(ctx context.Context) (err error) {
 		return err
 	}
 
-	if err := conn.WaitConnect(s.ctx); err != nil {
+	if err := conn.WaitConnect(ctx); err != nil {
 		conn.CloseWithError(fmt.Errorf("connection sequence failed: %w", err))
 		s.logger.Debug("connection sequence failed", "err", err)
 		return err
@@ -289,7 +289,7 @@ func (s *Session) CloseWithError(err error) {
 func (s *Session) dial(ctx context.Context, addr string) (*server.Conn, error) {
 	select {
 	case <-s.ctx.Done():
-		return nil, errors.New("session is closed")
+		return nil, context.Cause(s.ctx)
 	default:
 	}
 
