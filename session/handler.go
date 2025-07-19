@@ -60,21 +60,7 @@ loop:
 		case *spectrumpacket.UpdateCache:
 			s.SetCache(pk.Cache)
 		case packet.Packet:
-			ctx := NewContext()
-			s.Processor().ProcessServer(ctx, &pk)
-			if ctx.Cancelled() {
-				continue loop
-			}
-
-			if s.opts.SyncProtocol {
-				for _, latest := range s.client.Proto().ConvertToLatest(pk, s.client) {
-					s.tracker.handlePacket(latest)
-				}
-			} else {
-				s.tracker.handlePacket(pk)
-			}
-
-			if err := s.client.WritePacket(pk); err != nil {
+			if err := handleServerPacket(s, pk); err != nil {
 				s.CloseWithError(fmt.Errorf("failed to write packet to client: %w", err))
 				logError(s, "failed to write packet to client", err)
 				break loop
@@ -149,6 +135,27 @@ loop:
 	}
 }
 
+// handleServerPacket processes and forwards the provided packet from the server to the client.
+func handleServerPacket(s *Session, pk packet.Packet) (err error) {
+	ctx := NewContext()
+	if s.opts.SyncProtocol {
+		for _, latest := range s.client.Proto().ConvertToLatest(pk, s.client) {
+			s.Processor().ProcessServer(ctx, &latest)
+			if ctx.Cancelled() {
+				return
+			}
+			s.tracker.handlePacket(latest)
+		}
+	} else {
+		s.Processor().ProcessServer(ctx, &pk)
+		if ctx.Cancelled() {
+			return
+		}
+		s.tracker.handlePacket(pk)
+	}
+	return s.client.WritePacket(pk)
+}
+
 // handleClientPacket processes and forwards the provided packet from the client to the server.
 func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, shieldID int32, payload []byte) (err error) {
 	ctx := NewContext()
@@ -178,16 +185,22 @@ func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, shi
 
 	pk := factory()
 	pk.Marshal(s.client.Proto().NewReader(buf, shieldID, true))
-	s.Processor().ProcessClient(ctx, &pk)
-	if !ctx.Cancelled() {
-		if s.opts.SyncProtocol {
-			return s.Server().WritePacket(pk)
+	if s.opts.SyncProtocol {
+		s.Processor().ProcessClient(ctx, &pk)
+		if ctx.Cancelled() {
+			return
+		}
+		return s.Server().WritePacket(pk)
+	}
+
+	for _, latest := range s.client.Proto().ConvertToLatest(pk, s.client) {
+		s.Processor().ProcessClient(ctx, &latest)
+		if ctx.Cancelled() {
+			break
 		}
 
-		for _, latest := range s.client.Proto().ConvertToLatest(pk, s.client) {
-			if err := s.Server().WritePacket(latest); err != nil {
-				return err
-			}
+		if err := s.Server().WritePacket(latest); err != nil {
+			return err
 		}
 	}
 	return
