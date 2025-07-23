@@ -138,22 +138,27 @@ loop:
 // handleServerPacket processes and forwards the provided packet from the server to the client.
 func handleServerPacket(s *Session, pk packet.Packet) (err error) {
 	ctx := NewContext()
-	if s.opts.SyncProtocol {
-		for _, latest := range s.client.Proto().ConvertToLatest(pk, s.client) {
-			s.Processor().ProcessServer(ctx, &latest)
-			if ctx.Cancelled() {
-				return
-			}
-			s.tracker.handlePacket(latest)
-		}
-	} else {
+	if !s.opts.SyncProtocol {
 		s.Processor().ProcessServer(ctx, &pk)
 		if ctx.Cancelled() {
 			return
 		}
 		s.tracker.handlePacket(pk)
+		return s.client.WritePacket(pk)
 	}
-	return s.client.WritePacket(pk)
+
+	for _, latest := range s.client.Proto().ConvertToLatest(pk, s.client) {
+		s.Processor().ProcessServer(ctx, &latest)
+		if ctx.Cancelled() {
+			break
+		}
+
+		s.tracker.handlePacket(latest)
+		if err := s.client.WritePacket(latest); err != nil {
+			return err
+		}
+	}
+	return
 }
 
 // handleClientPacket processes and forwards the provided packet from the client to the server.
