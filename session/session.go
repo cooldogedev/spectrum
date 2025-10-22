@@ -96,6 +96,8 @@ func (s *Session) LoginContext(ctx context.Context) (err error) {
 		return err
 	}
 
+	s.Processor().ProcessDiscover(NewContext(), &serverAddr)
+
 	conn, err := s.dial(ctx, serverAddr)
 	if err != nil {
 		s.logger.Debug("dialer failed", "err", err)
@@ -324,6 +326,8 @@ func (s *Session) fallback() error {
 	if err != nil {
 		return fmt.Errorf("discovery failed: %w", err)
 	}
+
+	s.Processor().ProcessDiscoverFallback(NewContext(), &addr)
 
 	s.logger.Debug("transferring session to a fallback server", "addr", addr)
 	if err := s.Transfer(addr); err != nil {

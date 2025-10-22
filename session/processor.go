@@ -39,6 +39,10 @@ type Processor interface {
 	ProcessClientEncoded(ctx *Context, pk *[]byte)
 	// ProcessFlush is called before flushing the player's minecraft.Conn buffer in response to a downstream server request.
 	ProcessFlush(ctx *Context)
+	// ProcessDiscover is called to determine the primary server to send the player to.
+	ProcessDiscover(ctx *Context, target *string)
+	// ProcessDiscoverFallback is called to determine the fallback server to send the player to.
+	ProcessDiscoverFallback(ctx *Context, target *string)
 	// ProcessPreTransfer is called before transferring the player to a different server.
 	ProcessPreTransfer(ctx *Context, origin *string, target *string)
 	// ProcessTransferFailure is called when the player transfer to a different server fails.
@@ -63,6 +67,8 @@ func (NopProcessor) ProcessServerEncoded(_ *Context, _ *[]byte)              {}
 func (NopProcessor) ProcessClient(_ *Context, _ *packet.Packet)              {}
 func (NopProcessor) ProcessClientEncoded(_ *Context, _ *[]byte)              {}
 func (NopProcessor) ProcessFlush(_ *Context)                                 {}
+func (NopProcessor) ProcessDiscover(_ *Context, target *string)              {}
+func (NopProcessor) ProcessDiscoverFallback(_ *Context, target *string)      {}
 func (NopProcessor) ProcessPreTransfer(_ *Context, _ *string, _ *string)     {}
 func (NopProcessor) ProcessTransferFailure(_ *Context, _ *string, _ *string) {}
 func (NopProcessor) ProcessPostTransfer(_ *Context, _ *string, _ *string)    {}
