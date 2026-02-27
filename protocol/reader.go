@@ -6,6 +6,8 @@ import (
 	"io"
 )
 
+const maxPacketLength = 16 * 1024 * 1024
+
 // Reader is used for reading packets from an io.Reader.
 type Reader struct {
 	// r is the underlying io.Reader used for reading data.
@@ -24,6 +26,12 @@ func (r *Reader) ReadPacket() ([]byte, error) {
 	var length uint32
 	if err := binary.Read(r.r, binary.BigEndian, &length); err != nil {
 		return nil, fmt.Errorf("failed to read packet length: %w", err)
+	}
+	if length == 0 {
+		return nil, fmt.Errorf("invalid packet length: %d", length)
+	}
+	if length > maxPacketLength {
+		return nil, fmt.Errorf("packet length %d exceeds maximum %d", length, maxPacketLength)
 	}
 
 	pk := make([]byte, length)

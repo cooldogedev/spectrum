@@ -30,5 +30,7 @@ func (pk *ConnectionResponse) Encode(buf *bytes.Buffer) {
 
 // Decode ...
 func (pk *ConnectionResponse) Decode(buf *bytes.Buffer) {
-	_ = binary.Read(buf, binary.LittleEndian, pk.Response)
+	if err := binary.Read(buf, binary.LittleEndian, &pk.Response); err != nil {
+		pk.Response = ResponseFail
+	}
 }

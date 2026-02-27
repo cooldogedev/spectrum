@@ -273,6 +273,9 @@ func (c *Conn) read() (pk any, err error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(payload) == 0 {
+		return nil, errors.New("empty packet payload")
+	}
 
 	if payload[0] != packetDecodeNeeded && payload[0] != packetDecodeNotNeeded {
 		return nil, fmt.Errorf("unknown decode byte marker %v", payload[0])

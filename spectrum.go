@@ -29,8 +29,19 @@ type Spectrum struct {
 // It initializes opts with default options from util.DefaultOpts() if opts is nil,
 // and defaults to TCP transport if transport is nil transport.TCP.
 func NewSpectrum(discovery server.Discovery, logger *slog.Logger, opts *util.Opts, transport tr.Transport) *Spectrum {
+	defaults := util.DefaultOpts()
 	if opts == nil {
-		opts = util.DefaultOpts()
+		opts = defaults
+	} else {
+		if opts.Addr == "" {
+			opts.Addr = defaults.Addr
+		}
+		if opts.LatencyInterval <= 0 {
+			opts.LatencyInterval = defaults.LatencyInterval
+		}
+		if opts.ShutdownMessage == "" {
+			opts.ShutdownMessage = defaults.ShutdownMessage
+		}
 	}
 
 	if transport == nil {

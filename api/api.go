@@ -160,7 +160,7 @@ func (a *API) handle(c *Client, id int64) {
 
 	if a.authentication != nil && !a.authentication.Authenticate(connectionRequest.Token) {
 		_ = c.WritePacket(&packet.ConnectionResponse{Response: packet.ResponseUnauthorized})
-		a.logger.Error("unauthorized connection", "addr", addr, "token", connectionRequest.Token)
+		a.logger.Error("unauthorized connection", "addr", addr)
 		return
 	}
 

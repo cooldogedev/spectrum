@@ -110,7 +110,9 @@ loop:
 		}
 
 		if err := handleClientPacket(s, header, pool, shieldID, payload); err != nil {
-			s.Server().CloseWithError(fmt.Errorf("failed to write packet to server: %w", err))
+			if server := s.Server(); server != nil {
+				server.CloseWithError(fmt.Errorf("failed to write packet to server: %w", err))
+			}
 		}
 	}
 }
@@ -119,6 +121,10 @@ loop:
 // The client's latency is derived from half of RakNet's round-trip time (RTT).
 // To calculate the total latency, we multiply this value by 2.
 func handleLatency(s *Session, interval int64) {
+	if interval <= 0 {
+		s.logger.Warn("invalid latency interval, using default", "interval", interval, "default", int64(3000))
+		interval = 3000
+	}
 	ticker := time.NewTicker(time.Millisecond * time.Duration(interval))
 	defer ticker.Stop()
 loop:

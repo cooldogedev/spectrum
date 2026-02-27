@@ -43,10 +43,11 @@ type Session struct {
 	processor   Processor
 	processorMu sync.RWMutex
 
-	cache      atomic.Value
-	latency    atomic.Int64
-	inFallback atomic.Bool
-	once       sync.Once
+	cache        atomic.Value
+	latency      atomic.Int64
+	inFallback   atomic.Bool
+	transferring atomic.Bool
+	once         sync.Once
 }
 
 // NewSession creates a new Session instance using the provided minecraft.Conn.
@@ -160,20 +161,23 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 	if processorCtx.Cancelled() {
 		return errors.New("processor failed")
 	}
+	if !s.transferring.CompareAndSwap(false, true) {
+		return errors.New("transfer already in progress")
+	}
+	releaseTransfer := func() {
+		s.transferring.Store(false)
+	}
 
 	s.sendMetadata(true)
 	conn, err := s.dial(ctx, addr)
 	if err != nil {
+		releaseTransfer()
 		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
 		return fmt.Errorf("dialer failed: %w", err)
 	}
 
-	if err := conn.DoConnect(); err != nil {
-		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
-		return fmt.Errorf("connection sequence failed failed: %w", err)
-	}
-
 	conn.OnConnect(func(err error) {
+		defer releaseTransfer()
 		if err != nil {
 			s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
 			return
@@ -191,6 +195,12 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 		s.Processor().ProcessPostTransfer(NewContext(), &origin, &addr)
 		s.logger.Debug("transferred session", "origin", origin, "target", addr)
 	})
+
+	if err := conn.DoConnect(); err != nil {
+		releaseTransfer()
+		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+		return fmt.Errorf("connection sequence failed: %w", err)
+	}
 	return nil
 }
 

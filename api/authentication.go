@@ -1,6 +1,6 @@
 package api
 
-import "strings"
+import "crypto/subtle"
 
 // Authentication defines an interface for authentication methods.
 type Authentication interface {
@@ -22,5 +22,5 @@ func NewSecretBasedAuthentication(secret string) *SecretBasedAuthentication {
 
 // Authenticate ...
 func (authentication *SecretBasedAuthentication) Authenticate(token string) bool {
-	return strings.EqualFold(authentication.secret, token)
+	return subtle.ConstantTimeCompare([]byte(authentication.secret), []byte(token)) == 1
 }

@@ -35,7 +35,7 @@ func Dial(addr, token string) (c *Client, err error) {
 
 	connectionResponse, ok := connectionResponsePacket.(*packet.ConnectionResponse)
 	if !ok {
-		return nil, fmt.Errorf("expected connection response, got %d", connectionResponse.ID())
+		return nil, fmt.Errorf("expected connection response, got %d", connectionResponsePacket.ID())
 	}
 
 	if connectionResponse.Response == packet.ResponseFail {
@@ -47,7 +47,7 @@ func Dial(addr, token string) (c *Client, err error) {
 	}
 
 	if connectionResponse.Response != packet.ResponseSuccess {
-		return nil, fmt.Errorf("received an unknown response code %d", connectionResponse.ID())
+		return nil, fmt.Errorf("received an unknown response code %d", connectionResponse.Response)
 	}
 	return c, nil
 }

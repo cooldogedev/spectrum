@@ -29,18 +29,45 @@ func NewSpectral(logger *slog.Logger) *Spectral {
 
 // Dial ...
 func (s *Spectral) Dial(ctx context.Context, addr string) (io.ReadWriteCloser, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	conn, err := s.getOrDial(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
 
+	stream, err := conn.OpenStream(ctx)
+	if err != nil {
+		if conn.Context().Err() != nil {
+			s.mu.Lock()
+			if found, ok := s.connections[addr]; ok && found == conn {
+				delete(s.connections, addr)
+			}
+			s.mu.Unlock()
+		}
+		return nil, err
+	}
+	return stream, nil
+}
+
+func (s *Spectral) getOrDial(ctx context.Context, addr string) (spectral.Connection, error) {
+	s.mu.Lock()
 	conn, ok := s.connections[addr]
+	s.mu.Unlock()
 	if !ok {
 		c, err := spectral.Dial(ctx, addr)
 		if err != nil {
 			return nil, err
 		}
 
+		s.mu.Lock()
+		if existing, exists := s.connections[addr]; exists {
+			s.mu.Unlock()
+			_ = c.CloseWithError(0, "duplicate connection")
+			return existing, nil
+		}
+
 		conn = c
 		s.connections[addr] = conn
+		s.mu.Unlock()
 		s.logger.Debug("established connection", "addr", addr)
 		go func(conn spectral.Connection, addr string) {
 			<-conn.Context().Done()
@@ -52,10 +79,5 @@ func (s *Spectral) Dial(ctx context.Context, addr string) (io.ReadWriteCloser, e
 			s.logger.Debug("closed connection", "addr", addr, "cause", context.Cause(conn.Context()))
 		}(conn, addr)
 	}
-	stream, err := conn.OpenStream(ctx)
-	if err != nil {
-		delete(s.connections, addr)
-		return nil, err
-	}
-	return stream, nil
+	return conn, nil
 }
