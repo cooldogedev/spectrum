@@ -315,7 +315,7 @@ func (c *Conn) deferPacket(pk any) {
 
 // expect stores packet IDs that will be read and handled before finalizing the connection sequence.
 func (c *Conn) expect(ids ...uint32) {
-	c.expectedIds = ids
+	c.expectedIds = append(ids, packet.IDDisconnect)
 }
 
 // handlePacket handles an expected packet that was received before the connection sequence finalization.
@@ -344,6 +344,8 @@ func (c *Conn) handlePacket(p packet.Packet) (err error) {
 			err = c.handleChunkRadiusUpdated(pk)
 		case *packet.PlayStatus:
 			err = c.handlePlayStatus(pk)
+		case *packet.Disconnect:
+			c.CloseWithError(fmt.Errorf(pk.Message))
 		default:
 			c.deferPacket(pk)
 		}
