@@ -17,7 +17,7 @@ import (
 // By leveraging streams for individual server connections, it enhances overall performance and
 // resource utilization.
 type QUIC struct {
-	connections map[string]quic.Connection
+	connections map[string]*quic.Conn
 	logger      *slog.Logger
 	mu          sync.Mutex
 }
@@ -25,7 +25,7 @@ type QUIC struct {
 // NewQUIC creates a new QUIC transport instance.
 func NewQUIC(logger *slog.Logger) *QUIC {
 	return &QUIC{
-		connections: make(map[string]quic.Connection),
+		connections: make(map[string]*quic.Conn),
 		logger:      logger,
 	}
 }
@@ -60,7 +60,7 @@ func (q *QUIC) Dial(ctx context.Context, addr string) (io.ReadWriteCloser, error
 		conn = c
 		q.connections[addr] = conn
 		q.logger.Debug("established connection", "addr", addr)
-		go func(conn quic.Connection, addr string) {
+		go func(conn *quic.Conn, addr string) {
 			<-conn.Context().Done()
 			q.mu.Lock()
 			if found, ok := q.connections[addr]; ok && found == conn {

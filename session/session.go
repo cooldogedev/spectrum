@@ -110,7 +110,7 @@ func (s *Session) LoginContext(ctx context.Context) (err error) {
 		return err
 	}
 
-	if err := conn.WaitConnect(s.ctx); err != nil {
+	if err := conn.WaitConnect(ctx); err != nil {
 		conn.CloseWithError(fmt.Errorf("connection sequence failed: %w", err))
 		s.logger.Debug("connection sequence failed", "err", err)
 		return err
@@ -164,18 +164,18 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 	s.sendMetadata(true)
 	conn, err := s.dial(ctx, addr)
 	if err != nil {
-		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr, err)
 		return fmt.Errorf("dialer failed: %w", err)
 	}
 
 	if err := conn.DoConnect(); err != nil {
-		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr, err)
 		return fmt.Errorf("connection sequence failed failed: %w", err)
 	}
 
 	conn.OnConnect(func(err error) {
 		if err != nil {
-			s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+			s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr, err)
 			return
 		}
 
@@ -183,7 +183,7 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 		s.animation.Play(s.client, gameData)
 		s.sendGameData(conn.GameData())
 		if err := conn.DoSpawn(); err != nil {
-			s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+			s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr, err)
 			return
 		}
 		s.inFallback.Store(false)
@@ -274,11 +274,10 @@ func (s *Session) CloseWithError(err error) {
 		s.Processor().ProcessDisconnection(NewContext(), &message)
 		_ = s.client.WritePacket(&packet.Disconnect{Message: message})
 		_ = s.client.Close()
-		s.serverMu.RLock()
-		if s.serverConn != nil {
-			s.serverConn.CloseWithError(err)
+		if conn := s.Server(); conn != nil {
+			conn.CloseWithError(err)
 		}
-		s.serverMu.RUnlock()
+		s.cancelFunc(err)
 		s.registry.RemoveSession(s.client.IdentityData().XUID)
 		s.logger.Info("closed session", "err", err)
 	})
@@ -289,7 +288,7 @@ func (s *Session) CloseWithError(err error) {
 func (s *Session) dial(ctx context.Context, addr string) (*server.Conn, error) {
 	select {
 	case <-s.ctx.Done():
-		return nil, errors.New("session is closed")
+		return nil, context.Cause(s.ctx)
 	default:
 	}
 
