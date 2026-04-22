@@ -323,9 +323,7 @@ func (s *Session) fallback() error {
 	s.serverMu.RLock()
 	origin := s.serverAddr
 	s.serverMu.RUnlock()
-
 	processorCtx := NewContext()
-
 	addr, err := s.discovery.DiscoverFallback(s.client)
 	if err != nil {
 		s.Processor().ProcessFallbackFailure(processorCtx, &origin, nil, err)
@@ -342,7 +340,6 @@ func (s *Session) fallback() error {
 		s.Processor().ProcessFallbackFailure(processorCtx, &origin, &addr, err)
 		return fmt.Errorf("transfer failed: %w", err)
 	}
-
 	s.Processor().ProcessPostFallback(processorCtx, &origin, &addr)
 	return nil
 }
