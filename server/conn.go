@@ -345,7 +345,7 @@ func (c *Conn) handlePacket(p packet.Packet) (err error) {
 		case *packet.PlayStatus:
 			err = c.handlePlayStatus(pk)
 		case *packet.Disconnect:
-			c.CloseWithError(fmt.Errorf(pk.Message))
+			c.CloseWithError(errors.New(pk.Message))
 		default:
 			c.deferPacket(pk)
 		}
