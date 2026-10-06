@@ -378,6 +378,7 @@ func (s *Session) sendGameData(gameData minecraft.GameData) {
 	s.tracker.clearBossBars(s)
 	s.tracker.clearPlayers(s)
 	s.tracker.clearScoreboards(s)
+	s.tracker.clearShapes(s)
 	s.tracker.mu.Unlock()
 	_ = s.client.WritePacket(&packet.MovePlayer{
 		EntityRuntimeID: gameData.EntityRuntimeID,

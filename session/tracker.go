@@ -17,7 +17,9 @@ type tracker struct {
 	entities    *i64set.Set
 	players     *b16set.Set
 	scoreboards *strset.Set
-	mu          sync.Mutex
+	// shapes holds the dimension of every debug shape on screen, by network ID.
+	shapes map[uint64]protocol.Optional[int32]
+	mu     sync.Mutex
 }
 
 func newTracker() *tracker {
@@ -27,6 +29,7 @@ func newTracker() *tracker {
 		entities:    i64set.New(),
 		players:     b16set.New(),
 		scoreboards: strset.New(),
+		shapes:      make(map[uint64]protocol.Optional[int32]),
 	}
 }
 
@@ -49,6 +52,15 @@ func (t *tracker) handlePacket(pk packet.Packet) {
 			t.effects.Add(pk.EffectType)
 		} else if pk.Operation == packet.MobEffectRemove {
 			t.effects.Remove(pk.EffectType)
+		}
+	case *packet.PrimitiveShapes:
+		for _, shape := range pk.Shapes {
+			// A shape without a type removes the one with its network ID.
+			if _, ok := shape.Type.Value(); ok {
+				t.shapes[shape.NetworkID] = shape.DimensionID
+			} else {
+				delete(t.shapes, shape.NetworkID)
+			}
 		}
 	case *packet.PlayerList:
 		for _, entry := range pk.Entries {
@@ -113,6 +125,25 @@ func (t *tracker) clearPlayers(s *Session) {
 
 	_ = s.client.WritePacket(&packet.PlayerList{
 		Entries: entries,
+	})
+}
+
+func (t *tracker) clearShapes(s *Session) {
+	if len(t.shapes) == 0 {
+		return
+	}
+	shapes := make([]protocol.PrimitiveShape, 0, len(t.shapes))
+	for id, dimension := range t.shapes {
+		shapes = append(shapes, protocol.PrimitiveShape{
+			NetworkID:      id,
+			DimensionID:    dimension,
+			ExtraShapeData: &protocol.LastShape{},
+		})
+	}
+	clear(t.shapes)
+
+	_ = s.client.WritePacket(&packet.PrimitiveShapes{
+		Shapes: shapes,
 	})
 }
 
